@@ -1,0 +1,162 @@
+{
+  "name": "copilot-ai-panel",
+  "displayName": "Copilot AI Panel",
+  "description": "Multi-perspective AI discussions with configurable expert roles",
+  "version": "0.1.0",
+  "publisher": "ix",
+  "icon": "assets/icon.png",
+  "engines": {
+    "vscode": "^1.85.0",
+    "node": ">=22.0.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Education"
+  ],
+  "keywords": [
+    "copilot",
+    "ai",
+    "chat",
+    "panel",
+    "discussion",
+    "multi-role",
+    "collaboration"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ix/copilot-ai-panel"
+  },
+  "activationEvents": [
+    "onLanguageModel:*"
+  ],
+  "enabledApiProposals": [
+    "chatSessionsProvider",
+    "chatParticipantPrivate"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "chatParticipants": [
+      {
+        "id": "ix.copilot-ai-panel",
+        "name": "panel",
+        "description": "Multi-perspective AI discussions with expert roles",
+        "isSticky": true
+      }
+    ],
+    "commands": [
+      {
+        "command": "copilot-ai-panel.browse",
+        "title": "Browse Prompt Library",
+        "category": "AI Panel",
+        "icon": "$(library)"
+      },
+      {
+        "command": "copilot-ai-panel.search",
+        "title": "Search Prompts",
+        "category": "AI Panel",
+        "icon": "$(search)"
+      },
+      {
+        "command": "copilot-ai-panel.usePrompt",
+        "title": "Use Prompt",
+        "category": "AI Panel"
+      },
+      {
+        "command": "copilot-ai-panel.copyToWorkspace",
+        "title": "Copy Prompt to Workspace",
+        "category": "AI Panel"
+      },
+      {
+        "command": "copilot-ai-panel.createFromTemplate",
+        "title": "Create Prompt from Template",
+        "category": "AI Panel",
+        "icon": "$(add)"
+      },
+      {
+        "command": "copilot-ai-panel.installCategory",
+        "title": "Install Category to Workspace",
+        "category": "AI Panel"
+      },
+      {
+        "command": "copilot-ai-panel.listTools",
+        "title": "List Available Tools",
+        "category": "AI Panel",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "copilot-ai-panel.testPromptRendering",
+        "title": "Test Prompt Rendering (Diagnostics)",
+        "category": "AI Panel",
+        "icon": "$(bug)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "copilot-ai-panel",
+          "title": "AI Panel Library",
+          "icon": "$(organization)"
+        }
+      ]
+    },
+    "views": {
+      "copilot-ai-panel": [
+        {
+          "id": "copilot-ai-panel.library",
+          "name": "Prompt Library"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "copilot-ai-panel.search",
+          "when": "view == copilot-ai-panel.library",
+          "group": "navigation"
+        },
+        {
+          "command": "copilot-ai-panel.createFromTemplate",
+          "when": "view == copilot-ai-panel.library",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "copilot-ai-panel.usePrompt",
+          "when": "view == copilot-ai-panel.library && viewItem == prompt"
+        },
+        {
+          "command": "copilot-ai-panel.copyToWorkspace",
+          "when": "view == copilot-ai-panel.library && viewItem == prompt"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^18.x",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "@vscode/vsce": "^2.22.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.6.1"
+  },
+  "dependencies": {
+    "@github/copilot": "^0.0.365",
+    "@vscode/prompt-tsx": "^0.4.0-alpha.5",
+    "js-yaml": "^4.1.0"
+  }
+}
