@@ -1,0 +1,258 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "copilot-ai-flow.flow",
+  "title": "Copilot AI Flow",
+  "description": "Defines a multi-perspective AI flow discussion with configurable expert roles.",
+  "type": "object",
+  "required": ["name", "orchestration"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Display name for the panel discussion.",
+      "examples": ["Code Review Discussion", "Sprint Planning"]
+    },
+    "description": {
+      "type": "string",
+      "description": "Brief description of the panel's purpose. Shown in the library view."
+    },
+    "orchestration": {
+      "type": "string",
+      "enum": ["sequence", "cli"],
+      "description": "How roles interact.\n\n- `sequence`: Sequential execution via the language model API. Roles respond one after another.\n- `cli`: SDK/CLI delegation — the panel runs as a background agent via the GitHub Copilot CLI."
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "software-development",
+        "business",
+        "creative",
+        "education",
+        "design",
+        "operations"
+      ],
+      "description": "Top-level grouping used in the library view."
+    },
+    "subcategory": {
+      "type": "string",
+      "description": "Further categorization within a category (e.g. `code-quality`, `architecture`)."
+    },
+    "difficulty": {
+      "type": "string",
+      "enum": ["beginner", "intermediate", "advanced"],
+      "description": "Complexity level of the panel. Shown in the library view."
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Keywords for searching and filtering in the library."
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic version of this panel definition.",
+      "examples": ["1.0.0", "2.1.0"]
+    },
+    "author": {
+      "type": "string",
+      "description": "Creator attribution."
+    },
+    "model": {
+      "type": "string",
+      "description": "Panel-level model override. When `orchestration` is `cli` this sets the background agent's model. Individual roles can override with their own `model` field.",
+      "examples": ["claude-sonnet-4.5", "claude-haiku-4.5", "claude-opus-4.5", "gpt-5", "gpt-5.1"]
+    },
+    "tools": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Global tools available to all roles (sequence mode only). Use `[\"*\"]` to include all available tools.",
+      "examples": [
+        ["copilot_readFile", "copilot_findTextInFiles"],
+        ["*"]
+      ]
+    },
+    "skills": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/skillRef" },
+      "description": "Skills injected into every role's system prompt across the entire panel. Merged with stage-level and role-level skills."
+    },
+    "contexts": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/contextRef" },
+      "description": "Additional context files injected into every role's system prompt across the entire flow. Use for design guides, architectural principles, security guardrails, coding standards, etc. Merged with stage-level and role-level contexts.",
+      "examples": [
+        [".github/architecture.md", ".github/security-guardrails.md"],
+        [{ "path": "../docs/api-design-principles.md" }]
+      ]
+    },
+    "roles": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/role" },
+      "minItems": 2,
+      "description": "Flat list of roles for simple panels. Ignored when `stages` is present. Requires at least 2 roles."
+    },
+    "stages": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/stage" },
+      "minItems": 1,
+      "description": "Stage-based execution. Stages run sequentially; each stage loops its sub-flow up to `iterations` times. When present, top-level `roles` is ignored."
+    },
+    "sharedContext": {
+      "type": "string",
+      "description": "Optional context shared with all roles before the user query. Supports markdown formatting."
+    },
+    "isolation": {
+      "type": "string",
+      "enum": ["workspace", "worktree"],
+      "description": "CLI orchestration only. Where changes are applied.\n\n- `workspace`: Applied directly to the active workspace (default).\n- `worktree`: Applied in an isolated Git worktree for safe experimentation."
+    },
+    "cliMode": {
+      "type": "string",
+      "enum": ["supervised", "autonomous"],
+      "description": "CLI orchestration only. Permission and interaction model.\n\n- `supervised`: User approves each tool call interactively (default).\n- `autonomous`: Agent executes with minimal confirmation prompts."
+    },
+    "customAgent": {
+      "type": "string",
+      "description": "CLI orchestration only. Agent identifier for specialized behaviour.",
+      "examples": ["___vscode_default___", "code-review", "test-writer"]
+    }
+  },
+  "definitions": {
+    "skillRef": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Bare skill name — resolved via `vscode.chat.getSkills()`, then `.agents/skills/{name}/SKILL.md`, then `.github/skills/{name}/SKILL.md`."
+        },
+        {
+          "type": "object",
+          "required": ["path"],
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Path to a SKILL.md file, relative to this panel file."
+            }
+          }
+        }
+      ]
+    },
+    "contextRef": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Path to a context file. Resolved first relative to this flow file, then relative to the workspace root. Supports any text format: Markdown, plain text, YAML, etc.",
+          "examples": [".github/architecture.md", "docs/security-policy.md"]
+        },
+        {
+          "type": "object",
+          "required": ["path"],
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Path to a context file, relative to this flow file."
+            }
+          }
+        }
+      ]
+    },
+    "agentRef": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Bare agent name — resolved from `.github/agents/{name}.agent.md` or `.agents/{name}.agent.md`."
+        },
+        {
+          "type": "object",
+          "required": ["path"],
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Path to an agent file, relative to this panel file."
+            }
+          }
+        }
+      ]
+    },
+    "role": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Display name of the role (e.g. `Senior Developer`, `Security Reviewer`)."
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Instructions defining this role's perspective and responsibilities. Required unless `agent` is set."
+        },
+        "agent": {
+          "$ref": "#/definitions/agentRef",
+          "description": "Agent file whose body becomes (or augments) the system prompt. The body's `$ARGUMENTS` placeholder is substituted with the active user query."
+        },
+        "args": {
+          "type": "string",
+          "description": "Static string substituted into `$ARGUMENTS` in the agent/skill body. When absent, the active user query is used."
+        },
+        "model": {
+          "type": "string",
+          "description": "Model override for this specific role. Takes precedence over the panel-level `model`.",
+          "examples": ["claude-sonnet-4.5", "claude-haiku-4.5", "gpt-5"]
+        },
+        "skills": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/skillRef" },
+          "description": "Skills injected into this role's system prompt only. Merged with panel-level and stage-level skills."
+        },
+        "contexts": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/contextRef" },
+          "description": "Additional context files injected into this role's system prompt only. Merged with flow-level and stage-level contexts. Use for role-specific guidelines or reference material."
+        }
+      }
+    },
+    "stage": {
+      "type": "object",
+      "required": ["name", "subFlow", "iterations", "roles"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Display name shown in the chat stream as the stage header."
+        },
+        "subFlow": {
+          "type": "string",
+          "enum": ["sequence", "research-edit-review", "plan-execute-test-fix"],
+          "description": "Execution pattern for roles within this stage.\n\n- `sequence`: Roles run in order, no iteration semantics.\n- `research-edit-review`: Researcher → Editor → Critic. Critic emits `doneWord` to converge early.\n- `plan-execute-test-fix`: Planner → Executor → Tester (→ Fixer). Tester emits `doneWord` when passing."
+        },
+        "iterations": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of sub-flow repetitions. If `doneWord` is set, the stage exits early when the last role's response contains it; otherwise all iterations always run."
+        },
+        "doneWord": {
+          "type": "string",
+          "description": "Convergence sentinel. When the last role's response contains this string the stage exits early, regardless of remaining iterations. If omitted, the stage always runs for the full `iterations` count. Example: `\"<!-- flow:done -->\"`."
+        },
+        "roles": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/role" },
+          "minItems": 1,
+          "description": "Roles that participate in this stage."
+        },
+        "skills": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/skillRef" },
+          "description": "Skills injected into every role in this stage. Merged with panel-level skills."
+        },
+        "contexts": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/contextRef" },
+          "description": "Additional context files injected into every role in this stage. Merged with flow-level contexts. Use for stage-specific guidelines or reference material."
+        }
+      }
+    }
+  }
+}

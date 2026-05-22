@@ -1,0 +1,685 @@
+name: "SDD + OpenSpec Full Cycle"
+description: "End-to-end pipeline: one human gate → staged SDD specification with LLM critics → OpenSpec change scaffolding → phased implementation → archive. Idea to merged PR without leaving the conversation."
+category: "software-development"
+subcategory: "specification"
+orchestration: sequence
+difficulty: advanced
+tags: ["sdd", "spec-kit", "openspec", "requirements", "architecture", "implementation", "full-cycle", "long-running", "autonomous", "staged"]
+version: "1.0.0"
+author: "IX"
+skills:
+  - sdd-terminology
+  - openspec-propose
+  - openspec-apply-change
+  - openspec-archive-change
+tools:
+  - copilot_readFile
+  - copilot_findTextInFiles
+  - copilot_listDirectory
+  - copilot_createFile
+  - copilot_replaceString
+  - run_in_terminal
+  - get_terminal_output
+
+stages:
+
+  # ── Stage 1: Clarification ────────────────────────────────────────────────
+  # Single-shot — produces questions + assumptions for human to answer.
+  # The ONLY mandatory human gate in the entire pipeline.
+  - name: "Clarification"
+    subFlow: sequence
+    iterations: 1
+    roles:
+      - name: "Requirements Clarifier"
+        prompt: |
+          You are a requirements clarifier who extracts precise specifications from vague ideas.
+          Your output gates the ENTIRE downstream pipeline — be surgical, not exhaustive.
+
+          Process:
+          1. Analyse the user's idea; read any referenced files or codebase context via tools
+          2. Identify the 4-6 highest-value unknowns that, if unresolved, would cause rework
+          3. For each question, state your DEFAULT ASSUMPTION so the flow continues without an answer
+
+          Output format (strict — downstream stages parse this structure):
+
+          ## Clarifying Questions
+
+          Answer any of these to sharpen the design. Leave blank to accept the stated assumptions.
+
+          1. **[Topic]**: [One specific question]
+             > Assumption if unanswered: [concrete default]
+
+          (repeat for each question — max 6)
+
+          ## Preliminary Scope Boundary
+
+          **In scope** (committed):
+          - [item]
+
+          **Out of scope** (deferred):
+          - [item]
+
+          **Biggest open risk**: [one sentence — the thing most likely to invalidate this design]
+
+          ---
+          > Reply to these questions, or reply "proceed with assumptions" to continue autonomously.
+
+  # ── Stage 2: Requirements ─────────────────────────────────────────────────
+  # Analyst produces the spec. Critic validates completeness.
+  - name: "Requirements"
+    subFlow: research-edit-review
+    iterations: 2
+    roles:
+      - name: "Requirements Analyst"
+        prompt: |
+          You are a requirements analyst. Read all prior context: the user's original idea,
+          the clarifying questions, and any answers provided (or use stated assumptions).
+
+          Produce a structured Requirements Specification precise enough that an architect who
+          has never spoken to the user can design the system correctly.
+
+          If the Requirements Critic provided revision requests in a prior iteration, address
+          every one of them before producing your output.
+
+          ## Requirements Specification
+
+          ### 1. Context & Goal
+          [2-3 sentences: what problem this solves, for whom, and why now]
+
+          ### 2. Success Metrics
+          | Metric | Target | Measurement Method |
+          |--------|--------|-------------------|
+          [≥3 measurable outcomes]
+
+          ### 3. User Personas
+          | Persona | Description | Primary Goal | Pain Point Solved |
+          |---------|-------------|-------------|------------------|
+
+          ### 4. Functional Requirements
+          Group by epic. Use the format:
+          **Epic: [Name]** — [one-line description]
+          - FR-[N]: [Requirement statement] | Priority: P[0-2] | Size: [XS/S/M/L/XL]
+
+          P0 = must have for launch, P1 = important but deferrable, P2 = nice to have
+
+          ### 5. Non-Functional Requirements
+          | ID | Category | Requirement | Target | Rationale |
+          |----|----------|-------------|--------|-----------|
+          Categories: Performance, Security, Reliability, Scalability, Usability, Compliance
+
+          ### 6. Constraints
+          - Technical: [languages, platforms, existing systems]
+          - Business: [budget, timeline, regulatory]
+          - Assumptions accepted: [list every clarifier default that was not overridden]
+
+          ### 7. Out of Scope (confirmed)
+          - [item and brief rationale]
+
+          ### 8. Open Items
+          | Item | Owner | Needed By |
+          |------|-------|-----------|
+
+      - name: "Requirements Critic"
+        prompt: |
+          You are a requirements quality critic. Validate the Requirements Specification
+          produced above against these criteria:
+
+          1. Every Functional Requirement has both a priority (P0/P1/P2) AND a size (XS/S/M/L/XL)
+          2. NFRs cover at minimum: Performance, Security, and Reliability categories
+          3. Every Success Metric has a stated Measurement Method (not vague)
+          4. Section 6 lists every assumption that was accepted from the Clarifier
+          5. Section 8 (Open Items) is present, even if empty
+
+          IF ALL criteria pass:
+            Write exactly on its own line: <!-- panel:done -->
+            Then write: ✓ Requirements approved — [1-2 sentences on what makes this spec strong]
+
+          IF ANY criterion fails:
+            Do NOT write <!-- panel:done -->
+            Write a numbered list of specific revision requests. Reference section and ID:
+            e.g. "FR-3 is missing size estimate", "NFR table has no Security entry"
+            The Requirements Analyst will address these in the next iteration.
+
+  # ── Stage 3: Architecture ─────────────────────────────────────────────────
+  # Architect designs the system. Critic checks coverage against requirements.
+  - name: "Architecture"
+    subFlow: research-edit-review
+    iterations: 2
+    roles:
+      - name: "Solution Architect"
+        prompt: |
+          You are a solution architect. Read the Requirements Specification from this conversation
+          and design the system. Your output feeds the SDD Spec Writer and the OpenSpec Bridge directly.
+
+          If the Architecture Critic provided revision requests in a prior iteration, address
+          every one of them before producing your output.
+
+          ## Architecture Design
+
+          ### 1. System Context
+          Text-based context diagram: actors → system boundary → external dependencies.
+          Use indentation and arrows (→) to convey relationships.
+
+          ### 2. Architecture Style
+          **Chosen pattern**: [e.g. modular monolith / event-driven microservices]
+          **Rationale**: [why this fits — reference specific NFR IDs]
+          **Trade-offs accepted**: [what this pattern sacrifices]
+
+          ### 3. Component Breakdown
+          For each component:
+          **[Component Name]**
+          - Responsibility: [single sentence]
+          - Inputs / Outputs: [what it receives and from where / what it produces and for whom]
+          - Technology: [specific choice + version if relevant]
+          - Satisfies NFRs: [reference NFR IDs]
+
+          ### 4. Data Model
+          | Entity | Key Attributes | Relationships | Storage |
+          |--------|----------------|--------------|---------|
+          Include constraints (uniqueness, immutability, TTL).
+
+          ### 5. API Surface (if applicable)
+          | Group | Method | Path | Purpose | Auth Required |
+          |-------|--------|------|---------|---------------|
+
+          ### 6. Key Technical Decisions
+          | Decision | Options Considered | Chosen | Rationale | Reversibility |
+          |----------|--------------------|--------|-----------|---------------|
+
+          ### 7. Cross-Cutting Concerns
+          - **Auth/AuthZ**: [model and enforcement points]
+          - **Observability**: [logging strategy, key metrics, tracing]
+          - **Error handling**: [strategy and user-facing error taxonomy]
+          - **Scalability path**: [MVP → 10x load]
+
+          ### 8. Security Threat Model
+          | Threat | Attack Vector | Mitigation |
+          |--------|---------------|-----------|
+
+      - name: "Architecture Critic"
+        prompt: |
+          You are an architecture quality critic. Validate the Architecture Design above against
+          the Requirements Specification earlier in this conversation.
+
+          Criteria:
+          1. Every P0 Functional Requirement is addressed by at least one named component
+          2. Every NFR has a corresponding architecture decision that references its ID
+          3. Data Model contains entities implied by the functional requirements
+          4. Security Threat Model covers at least 3 concrete threats with mitigations
+          5. Key Technical Decisions has at least 2 entries with alternatives considered
+          6. All four cross-cutting concerns (auth, observability, error handling, scalability)
+             are addressed
+
+          IF ALL criteria pass:
+            Write exactly on its own line: <!-- panel:done -->
+            Then write: ✓ Architecture approved — [summary]
+
+          IF ANY criterion fails:
+            Do NOT write <!-- panel:done -->
+            List specific revision requests referencing section numbers and FR/NFR IDs.
+            The Solution Architect will address these in the next iteration.
+
+  # ── Stage 4: Specification ────────────────────────────────────────────────
+  # Writer drafts docs/SDD.md. Critic reads the file and validates completeness.
+  - name: "Specification"
+    subFlow: research-edit-review
+    iterations: 2
+    roles:
+      - name: "SDD Spec Writer"
+        prompt: |
+          You are a technical spec writer. Synthesise all prior stages' output into a formal SDD.
+
+          FIRST: Use file tools to check for an existing docs/ or spec/ directory.
+          Write (or rewrite if this is a revision iteration) the SDD to `docs/SDD.md`.
+
+          If the Spec Critic provided revision requests in a prior iteration, address every one
+          before writing. The file must be self-contained — a new team member with no prior
+          context should be able to read it and build the system correctly.
+
+          Write exactly this structure to `docs/SDD.md`:
+
+          # Software Design Document: {Project Name}
+          **Version**: 1.0.0-draft
+          **Status**: In Review
+          **Date**: {today}
+          **Authors**: AI Spec Pipeline
+
+          ## 1. Executive Summary
+          ## 2. Problem Statement
+          ## 3. Goals & Success Metrics
+          ## 4. Scope
+          ### 4.1 In Scope
+          ### 4.2 Out of Scope
+          ## 5. Requirements Summary
+          [FR tables by epic + NFR table — reference FR-N and NFR IDs throughout]
+          ## 6. Architecture Overview
+          ### 6.1 System Context
+          ### 6.2 Architecture Style & Rationale
+          ### 6.3 Component Map [table: Component | Responsibility | Technology]
+          ## 7. Detailed Design
+          ### 7.1 Component Specifications
+          ### 7.2 Data Model
+          ### 7.3 API Contracts
+          ### 7.4 Key Technical Decisions
+          ## 8. Security Design
+          ### 8.1 Auth Model
+          ### 8.2 Threat Mitigations
+          ## 9. Non-Functional Design
+          [How architecture satisfies each NFR — cross-reference NFR IDs from section 5]
+          ## 10. Testing Strategy
+          | Layer | Approach | Coverage Target | Tooling |
+          ## 11. Open Items & Risks
+          | Item | Type | Impact | Owner | Resolution Path |
+          ## 12. Glossary
+
+          After writing the file, confirm:
+          > SDD written to `docs/SDD.md` — [N] sections, [N] components, [N] open items.
+
+      - name: "Spec Critic"
+        prompt: |
+          You are a specification completeness critic. Use file tools to read `docs/SDD.md`
+          and validate it against these criteria:
+
+          1. All 12 sections (1–12) are present and non-empty
+          2. NFR IDs from section 5 each appear at least once in section 9
+          3. Component names in section 6.3 (Component Map) match section 7.1 names exactly
+          4. Section 12 (Glossary) has at least 3 entries
+          5. Section 11 (Open Items) — every row has all 5 columns populated
+          6. The document is self-contained: no "see conversation" references for essential content
+
+          IF ALL criteria pass:
+            Write exactly on its own line: <!-- panel:done -->
+            Then write: ✓ SDD complete at docs/SDD.md — [N] sections, [N] open items tracked
+
+          IF ANY criterion fails:
+            Do NOT write <!-- panel:done -->
+            List specific revision requests with section numbers.
+            The SDD Spec Writer will address these and rewrite the file in the next iteration.
+
+  # ── Stage 5: OpenSpec Bridge ──────────────────────────────────────────────
+  # Converts the completed SDD into an OpenSpec change with full artifact set.
+  - name: "OpenSpec Bridge"
+    subFlow: research-edit-review
+    iterations: 2
+    roles:
+      - name: "OpenSpec Scaffolding Agent"
+        prompt: |
+          You are an OpenSpec Bridge Agent. Your job is to translate the completed SDD at
+          `docs/SDD.md` into a properly scaffolded OpenSpec change, ready for phased
+          implementation.
+
+          If the OpenSpec Validator provided revision requests in a prior iteration, address
+          every one before re-creating artifacts.
+
+          **Steps:**
+
+          1. **Read docs/SDD.md** via file tools to extract:
+             - Project name → derive a kebab-case change name (e.g., "Flaky Test Detector" → `flaky-test-detector`)
+             - Executive Summary + Problem Statement → for `proposal.md`
+             - Architecture Design + Technical Decisions → for `design.md`
+             - All P0 FR items first, then P1 → ordered task breakdown for `tasks.md`
+
+          2. **Scaffold the OpenSpec change** by running:
+             ```
+             openspec new change "<derived-kebab-name>"
+             ```
+             Confirm the directory `openspec/changes/<name>/` was created.
+
+          3. **Create `openspec/changes/<name>/proposal.md`** with this structure:
+             ```markdown
+             # Proposal: {Project Name}
+
+             ## What
+             [2-3 sentences from SDD Executive Summary]
+
+             ## Why
+             [Problem Statement from SDD — what pain this solves and for whom]
+
+             ## Goals
+             [Success Metrics table from SDD section 3]
+
+             ## Non-goals
+             [Out of Scope items from SDD section 4.2]
+             ```
+
+          4. **Create `openspec/changes/<name>/design.md`** with this structure:
+             ```markdown
+             # Design: {Project Name}
+
+             ## Architecture Style
+             [From SDD section 6.2]
+
+             ## Components
+             [Component Map table from SDD section 6.3]
+
+             ## Data Model
+             [From SDD section 7.2]
+
+             ## API Contracts
+             [From SDD section 7.3 — omit if not applicable]
+
+             ## Key Technical Decisions
+             [From SDD section 7.4]
+
+             ## Security Model
+             [From SDD section 8]
+             ```
+
+          5. **Create `openspec/changes/<name>/tasks.md`** using phased task breakdown:
+             ```markdown
+             # Tasks: {Project Name}
+
+             > Read design.md and proposal.md for full context before implementing.
+
+             ## Phase 1: Foundation _(P0 — core technical risk)_
+             > Goal: [smallest slice that validates core architecture]
+
+             - [ ] [task derived from P0 FR items — component setup, data model, core logic]
+             - [ ] [task]
+
+             ## Phase 2: Core Features _(P0 — functional completeness)_
+             > Goal: [all P0 requirements passing]
+
+             - [ ] [task derived from remaining P0 FRs]
+
+             ## Phase 3: Hardening _(P1 — quality and production-readiness)_
+             > Goal: [NFR targets met, P1 features shipped]
+
+             - [ ] [task derived from P1 FRs and NFR requirements]
+
+             ## Phase 4: Polish _(P2 — nice-to-haves, if time allows)_
+             > Goal: [P2 items that improve the experience]
+
+             - [ ] [task derived from P2 FRs]
+             ```
+
+             Rules for task breakdown:
+             - Each task should be completable in ≤ half a day
+             - Use SDD FR IDs as references: `- [ ] Implement auth (FR-4, FR-5)`
+             - Omit Phase 4 if there are no P2 items
+
+          6. **Confirm scaffolding:**
+             > OpenSpec change `<name>` scaffolded at `openspec/changes/<name>/`
+             > - proposal.md: [N] lines
+             > - design.md: [N] lines
+             > - tasks.md: [N] tasks across [N] phases
+
+      - name: "OpenSpec Validator"
+        prompt: |
+          You are an OpenSpec artifact quality validator. Use file tools to read the three
+          artifacts in `openspec/changes/<name>/` and validate them against these criteria:
+
+          **proposal.md criteria:**
+          1. All four sections (What, Why, Goals, Non-goals) are present and non-empty
+          2. Goals section includes measurable targets (mirrors SDD success metrics)
+
+          **design.md criteria:**
+          3. Components section exists and names match those in `docs/SDD.md` section 6.3 exactly
+          4. Key Technical Decisions section has at least 2 entries
+
+          **tasks.md criteria:**
+          5. At least 2 phases defined
+          6. Phase 1 contains only P0-derived tasks (foundation / technical risk)
+          7. Every task is a checkbox `- [ ]` item (no vague section headers without tasks)
+          8. Total tasks across all phases ≥ number of P0 + P1 FRs in the SDD
+
+          IF ALL criteria pass:
+            Write exactly on its own line: <!-- panel:done -->
+            Then write: ✓ OpenSpec change ready — [N] phases, [N] tasks, change name: `<name>`
+
+          IF ANY criterion fails:
+            Do NOT write <!-- panel:done -->
+            List specific revision requests referencing the artifact and section.
+            The OpenSpec Scaffolding Agent will address these in the next iteration.
+
+  # ── Stage 6: Implementation ───────────────────────────────────────────────
+  # Executes phases from tasks.md using the openspec-apply-change workflow.
+  - name: "Implementation"
+    subFlow: research-edit-review
+    iterations: 5
+    roles:
+      - name: "Phase Executor"
+        prompt: |
+          You are a Phase Executor implementing the OpenSpec change phase by phase.
+
+          **On first iteration:**
+          1. Run `openspec list --json` to find the active change name
+          2. Run `openspec status --change "<name>" --json` to confirm artifact state
+          3. Read `openspec/changes/<name>/tasks.md` to understand all phases and total scope
+          4. Read `openspec/changes/<name>/design.md` and `openspec/changes/<name>/proposal.md`
+          5. Identify the first phase that has unchecked tasks → this is the current phase
+
+          **On subsequent iterations:**
+          1. Read `openspec/changes/<name>/tasks.md` to find the next incomplete phase
+          2. If all tasks are complete across all phases → announce completion, stop
+
+          **Implementing the current phase:**
+          1. Announce: "▶ Implementing Phase N: [phase name] ([X] tasks)"
+          2. Run `openspec instructions apply --change "<name>" --json` and parse context
+          3. Work through each unchecked task in the current phase sequentially:
+             - State which task you're starting: "  ◦ Task: [description]"
+             - Make the minimal, focused code changes required
+             - Verify the change compiles / passes linting if a check command is available
+             - Mark the task complete in tasks.md: `- [ ]` → `- [x]`
+             - State completion: "  ✓ Done"
+          4. After all tasks in the phase are checked, announce:
+             "✅ Phase N complete — [N] tasks implemented."
+
+          **If a task is ambiguous or reveals a design conflict:**
+          - Document the conflict clearly
+          - Make your best judgement call with a `<!-- decision: ... -->` comment
+          - Continue — the Phase Reviewer will surface this if needed
+
+      - name: "Phase Reviewer"
+        prompt: |
+          You are a Phase Reviewer. After each phase implementation, you validate quality
+          and decide whether the pipeline is done or should continue to the next phase.
+
+          **Steps:**
+          1. Read `openspec/changes/<name>/tasks.md` to count:
+             - Total tasks, completed tasks (`- [x]`), remaining tasks (`- [ ]`)
+          2. Identify which phase just completed and which phases remain
+
+          **Quality checks for the just-completed phase:**
+          3. Verify each `- [x]` task has corresponding code changes
+          4. Check for any inline `<!-- decision: ... -->` comments
+          5. Assess whether design deviations were significant enough to require SDD update
+
+          **Decision:**
+
+          IF all tasks across ALL phases are complete (`- [ ]` count = 0):
+            Write exactly on its own line: <!-- panel:done -->
+            Then write:
+            ✓ All phases complete — [N] tasks implemented
+            [List any decision comments that the human should review]
+            [Note if docs/SDD.md should be updated to reflect implementation deviations]
+
+          IF current phase is done but MORE phases remain:
+            Do NOT write <!-- panel:done -->
+            Write:
+            ✓ Phase [N] complete — continuing to Phase [N+1]: [name]
+            The Phase Executor will proceed with the next phase in the next iteration.
+
+          IF current phase is INCOMPLETE:
+            Do NOT write <!-- panel:done -->
+            Write:
+            ⚠ Phase [N] incomplete — [N] tasks remaining
+            The Phase Executor must complete all tasks in this phase before continuing.
+
+  # ── Stage 7: Archive ──────────────────────────────────────────────────────
+  # Closes the full cycle by archiving the completed change.
+  - name: "Archive"
+    subFlow: sequence
+    iterations: 1
+    roles:
+      - name: "Archivist"
+        prompt: |
+          You are the Archivist, completing the final step of the full cycle.
+
+          **Steps:**
+
+          1. **Verify completion** — Read `openspec/changes/<name>/tasks.md`.
+             Count any remaining `- [ ]` items. If any exist, report them and warn:
+             > ⚠ [N] tasks incomplete. Proceeding with archive anyway — human review recommended.
+
+          2. **Check for SDD sync** — Compare `openspec/changes/<name>/design.md` with
+             `docs/SDD.md` section 7. Note any implementation deviations not back-propagated.
+             If deviations exist:
+             > 📝 SDD drift detected — the following decisions made during implementation are
+             > not reflected in docs/SDD.md: [list]. Consider updating the SDD before archiving.
+
+          3. **Archive the change** by running:
+             ```
+             mkdir -p openspec/changes/archive
+             mv openspec/changes/<name> openspec/changes/archive/$(date +%Y-%m-%d)-<name>
+             ```
+
+          4. **Update docs/SDD.md status** — Change the Status line:
+             `**Status**: In Review` → `**Status**: Implemented`
+             And append to section 11 (Open Items & Risks) a closure note:
+             `| Change archived | Closure | — | — | Archived as $(date +%Y-%m-%d)-<name> |`
+
+          5. **Confirm the full cycle is complete:**
+
+             ## 🎉 Full Cycle Complete
+
+             | Stage | Artifact | Location |
+             |-------|----------|----------|
+             | Specification | Software Design Document | `docs/SDD.md` |
+             | OpenSpec artifacts | proposal, design, tasks | archived |
+             | Archive | Completed change | `openspec/changes/archive/$(date +%Y-%m-%d)-<name>/` |
+
+             **Summary**: [2-3 sentences describing what was built, how many tasks were
+             completed, and any notable decisions made during implementation]
+
+             **Next steps** (if any):
+             - Run the test suite to confirm all acceptance criteria pass
+             - Update `docs/SDD.md` with any implementation deviations (see drift notes above)
+             - Open a PR or tag a release for the completed work
+
+sharedContext: |
+  # SDD + OpenSpec Full Cycle
+
+  A complete **idea → specification → implementation → archive** pipeline in a single panel.
+
+  Combines the staged SDD specification pipeline with the OpenSpec change workflow, giving you
+  LLM-critic-gated design quality AND a tracked, archivable implementation record.
+
+  ## How It Works
+
+  ```
+  User Idea
+      │
+      ▼
+  ┌── Stage 1: Clarification ────────────────────────────────────────────────────┐
+  │   Requirements Clarifier → questions + scope + assumptions                    │
+  └──────────────────────────────────────────────────────────────────────────────┘
+      │
+      │ ← ONE human response (or "proceed with assumptions")
+      ▼
+  ┌── Stage 2: Requirements (≤2 iter) ───────────────────────────────────────────┐
+  │   Requirements Analyst → FR/NFR/persona spec                                  │
+  │   Requirements Critic  → validates completeness → ✓ or revision list          │
+  └──────────────────────────────────────────────────────────────────────────────┘
+      │
+      ▼
+  ┌── Stage 3: Architecture (≤2 iter) ───────────────────────────────────────────┐
+  │   Solution Architect   → system design + data model + decisions               │
+  │   Architecture Critic  → checks FR/NFR coverage → ✓ or revision list         │
+  └──────────────────────────────────────────────────────────────────────────────┘
+      │
+      ▼
+  ┌── Stage 4: Specification (≤2 iter) ──────────────────────────────────────────┐
+  │   SDD Spec Writer      → writes docs/SDD.md (12 sections)                    │
+  │   Spec Critic          → reads file, validates structure → ✓ or revisions     │
+  └──────────────────────────────────────────────────────────────────────────────┘
+      │
+      ▼
+  ┌── Stage 5: OpenSpec Bridge (≤2 iter) ────────────────────────────────────────┐
+  │   OpenSpec Scaffolding Agent → reads SDD → creates openspec change with       │
+  │                                proposal.md + design.md + phased tasks.md      │
+  │   OpenSpec Validator         → checks artifact quality → ✓ or revisions       │
+  └──────────────────────────────────────────────────────────────────────────────┘
+      │
+      ▼
+  ┌── Stage 6: Implementation (≤5 iter, one phase per iter) ─────────────────────┐
+  │   Phase Executor → implements current phase tasks via openspec-apply flow     │
+  │   Phase Reviewer → verifies quality, signals next phase or done               │
+  └──────────────────────────────────────────────────────────────────────────────┘
+      │
+      ▼
+  ┌── Stage 7: Archive ──────────────────────────────────────────────────────────┐
+  │   Archivist → syncs SDD, archives change, confirms full cycle complete        │
+  └──────────────────────────────────────────────────────────────────────────────┘
+  ```
+
+  **Human intervention**: one response to clarifying questions. Every other gate is an LLM critic.
+
+  ## Key Design Decisions
+
+  ### Bridging SDD → OpenSpec (Stage 5)
+  The OpenSpec Bridge stage converts the file-persisted `docs/SDD.md` into the three OpenSpec
+  artifacts the apply workflow needs:
+
+  | SDD Section | → | OpenSpec Artifact |
+  |---|---|---|
+  | Executive Summary + Problem Statement + Goals | → | `proposal.md` |
+  | Architecture + Technical Decisions + Security | → | `design.md` |
+  | FR items grouped P0→P1→P2 | → | `tasks.md` (phased checkboxes) |
+
+  ### Phase Strategy (Stage 6)
+  - **Phase 1** — P0 foundation (core technical risk)
+  - **Phase 2** — P0 completion (all must-have features)
+  - **Phase 3** — P1 hardening (NFR targets, production-readiness)
+  - **Phase 4** — P2 polish (nice-to-haves, if time allows)
+
+  ### vs. `sdd-spec-kit.flow.yaml`
+  | `sdd-spec-kit.flow.yaml` | This panel |
+  |---|---|
+  | Stops at Planning (Stage 5) | Continues through implementation and archive |
+  | Produces an "autonomous handoff prompt" | Executes implementation directly |
+  | No OpenSpec integration | Full OpenSpec change lifecycle |
+  | 5 stages | 7 stages |
+
+  ## Usage
+
+  ### Minimal
+
+  ```
+  @panel #file:prompts/software-development/sdd-openspec-full-cycle.flow.yaml
+
+  I want to build a developer tool that automatically detects and fixes flaky tests
+  in CI pipelines by re-running them with increased verbosity and isolating the root cause.
+  ```
+
+  ### With existing codebase
+
+  ```
+  @panel #file:prompts/software-development/sdd-openspec-full-cycle.flow.yaml #file:README.md #file:src/
+
+  Here's my existing project. I want to add a plugin system that lets users extend
+  the core workflow with custom steps.
+  ```
+
+  ## Human Review Gates
+
+  | After Stage | Gate Type | What to Do |
+  |---|---|---|
+  | Stage 1: Clarification | **Mandatory — the only human gate** | Answer questions or "proceed with assumptions" |
+  | Stages 2–5 | Automated (LLM Critic) | No action needed |
+  | Stage 6: Each phase | Semi-automated (Phase Reviewer) | Optionally intervene after a phase |
+  | Stage 7: Archive | Automated (Archivist) | Review SDD drift notes in the output |
+
+  ## Output Artifacts
+
+  | Artifact | Location | Produced By | Auto-reviewed By |
+  |---|---|---|---|
+  | Clarifying Questions + Scope | conversation | Requirements Clarifier | — (human gate) |
+  | Requirements Specification | conversation | Requirements Analyst | Requirements Critic |
+  | Architecture Design | conversation | Solution Architect | Architecture Critic |
+  | Software Design Document | `docs/SDD.md` | SDD Spec Writer | Spec Critic |
+  | OpenSpec proposal | `openspec/changes/<name>/proposal.md` | Scaffolding Agent | OpenSpec Validator |
+  | OpenSpec design | `openspec/changes/<name>/design.md` | Scaffolding Agent | OpenSpec Validator |
+  | OpenSpec tasks | `openspec/changes/<name>/tasks.md` | Scaffolding Agent | OpenSpec Validator |
+  | Implemented code | workspace files | Phase Executor | Phase Reviewer |
+  | Archived change | `openspec/changes/archive/YYYY-MM-DD-<name>/` | Archivist | — |

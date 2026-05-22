@@ -4,29 +4,38 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { PanelParticipant } from './panel/panelParticipant';
-import { LibraryTreeProvider } from './ui/browserView';
+import { FlowParticipant } from './flow/flowParticipant';
+import { FlowEditorProvider } from './ui/flowEditorProvider';
 import { registerCommands } from './commands';
+import { SkillCompletionProvider } from './completion/skillCompletionProvider';
 
 export function activate(context: vscode.ExtensionContext) {
-	console.log('Copilot AI Panel extension is activating...');
+	console.log('Copilot AI Flow extension is activating...');
 
-	// Register the @panel participant
-	const participant = new PanelParticipant(context);
+	// Register the @flow participant
+	const participant = new FlowParticipant(context);
 	context.subscriptions.push(participant.register());
 
-	// Register the library tree view
-	const treeProvider = new LibraryTreeProvider(context);
+	// Register the React Flow canvas editor for *.flow.yaml / *.flow.yml files.
+	// Users can switch to the plain text editor via "Reopen with Text Editor"
+	// or by clicking "Edit Source" in the canvas toolbar.
+	context.subscriptions.push(FlowEditorProvider.register(context));
+
+	// Register skill name completions inside *.flow.yaml / *.flow.yml / *.prompt.md
 	context.subscriptions.push(
-		vscode.window.registerTreeDataProvider('copilot-ai-panel.library', treeProvider)
+		vscode.languages.registerCompletionItemProvider(
+			SkillCompletionProvider.selector,
+			new SkillCompletionProvider(),
+			...SkillCompletionProvider.triggerCharacters
+		)
 	);
 
 	// Register all commands
-	registerCommands(context, treeProvider);
+	registerCommands(context);
 
-	console.log('Copilot AI Panel extension activated successfully');
+	console.log('Copilot AI Flow extension activated successfully');
 }
 
 export function deactivate() {
-	console.log('Copilot AI Panel extension deactivated');
+	console.log('Copilot AI Flow extension deactivated');
 }

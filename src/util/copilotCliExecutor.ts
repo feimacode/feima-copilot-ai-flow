@@ -5,8 +5,8 @@
 
 import * as vscode from 'vscode';
 import { spawnProcess, findInPath } from './cliSpawner';
-import { IPanelContext } from '../context/panelContextBuilder';
-import { PanelTurn } from '../session/panelConversation';
+import { IFlowContext } from '../context/flowContextBuilder';
+import { FlowTurn } from '../session/flowConversation';
 
 /**
  * Options for executing GitHub Copilot CLI
@@ -15,15 +15,15 @@ export interface CopilotCliOptions {
 	/** Role name */
 	roleName: string;
 	/** Role system prompt */
-	systemPrompt: string;
+	prompt: string;
 	/** User query/task */
 	userQuery: string;
 	/** VS Code context (workspace, files, etc.) */
-	context: IPanelContext;
+	context: IFlowContext;
 	/** Shared context across roles */
 	sharedContext?: string;
 	/** Conversation history */
-	history?: PanelTurn[];
+	history?: FlowTurn[];
 	/** Cancellation token */
 	token?: vscode.CancellationToken;
 	/** Progress callback */
@@ -113,7 +113,7 @@ export class CopilotCliExecutor {
 		
 		// System prompt (role definition)
 		parts.push('# Role');
-		parts.push(options.systemPrompt);
+		parts.push(options.prompt);
 		parts.push('');
 		
 		// Shared context

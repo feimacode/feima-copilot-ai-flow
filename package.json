@@ -1,6 +1,6 @@
 {
-  "name": "copilot-ai-panel",
-  "displayName": "Copilot AI Panel",
+  "name": "copilot-ai-flow",
+  "displayName": "Copilot AI Flow",
   "description": "Multi-perspective AI discussions with configurable expert roles",
   "version": "0.1.0",
   "publisher": "ix",
@@ -18,125 +18,120 @@
     "copilot",
     "ai",
     "chat",
-    "panel",
+    "flow",
     "discussion",
     "multi-role",
     "collaboration"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/ix/copilot-ai-panel"
+    "url": "https://github.com/ix/copilot-ai-flow"
   },
   "activationEvents": [
     "onLanguageModel:*"
   ],
   "enabledApiProposals": [
     "chatSessionsProvider",
-    "chatParticipantPrivate"
+    "chatParticipantPrivate",
+    "chatPromptFiles",
+    "chatParticipantAdditions"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "chatParticipants": [
       {
-        "id": "ix.copilot-ai-panel",
-        "name": "panel",
+        "id": "ix.copilot-ai-flow",
+        "name": "flow",
         "description": "Multi-perspective AI discussions with expert roles",
-        "isSticky": true
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "search",
+            "description": "Search for flows in the built-in library by name, tag, or category",
+            "sampleRequest": "openspec refactoring"
+          },
+          {
+            "name": "list",
+            "description": "List all available flows grouped by category"
+          },
+          {
+            "name": "browse",
+            "description": "Browse the flow gallery with details",
+            "isSticky": true
+          },
+          {
+            "name": "install",
+            "description": "Copy a built-in flow to your workspace",
+            "sampleRequest": "sdd-spec-kit"
+          }
+        ]
       }
     ],
     "commands": [
       {
-        "command": "copilot-ai-panel.browse",
-        "title": "Browse Prompt Library",
-        "category": "AI Panel",
+        "command": "copilot-ai-flow.browse",
+        "title": "Open Flow Gallery",
+        "category": "AI Flow",
         "icon": "$(library)"
       },
       {
-        "command": "copilot-ai-panel.search",
+        "command": "copilot-ai-flow.search",
         "title": "Search Prompts",
-        "category": "AI Panel",
+        "category": "AI Flow",
         "icon": "$(search)"
       },
       {
-        "command": "copilot-ai-panel.usePrompt",
+        "command": "copilot-ai-flow.usePrompt",
         "title": "Use Prompt",
-        "category": "AI Panel"
+        "category": "AI Flow"
       },
       {
-        "command": "copilot-ai-panel.copyToWorkspace",
+        "command": "copilot-ai-flow.copyToWorkspace",
         "title": "Copy Prompt to Workspace",
-        "category": "AI Panel"
+        "category": "AI Flow"
       },
       {
-        "command": "copilot-ai-panel.createFromTemplate",
+        "command": "copilot-ai-flow.createFromTemplate",
         "title": "Create Prompt from Template",
-        "category": "AI Panel",
+        "category": "AI Flow",
         "icon": "$(add)"
       },
       {
-        "command": "copilot-ai-panel.installCategory",
+        "command": "copilot-ai-flow.installCategory",
         "title": "Install Category to Workspace",
-        "category": "AI Panel"
+        "category": "AI Flow"
       },
       {
-        "command": "copilot-ai-panel.listTools",
+        "command": "copilot-ai-flow.listTools",
         "title": "List Available Tools",
-        "category": "AI Panel",
+        "category": "AI Flow",
         "icon": "$(tools)"
-      },
-      {
-        "command": "copilot-ai-panel.testPromptRendering",
-        "title": "Test Prompt Rendering (Diagnostics)",
-        "category": "AI Panel",
-        "icon": "$(bug)"
       }
     ],
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "copilot-ai-panel",
-          "title": "AI Panel Library",
-          "icon": "$(organization)"
-        }
-      ]
-    },
-    "views": {
-      "copilot-ai-panel": [
-        {
-          "id": "copilot-ai-panel.library",
-          "name": "Prompt Library"
-        }
-      ]
-    },
-    "menus": {
-      "view/title": [
-        {
-          "command": "copilot-ai-panel.search",
-          "when": "view == copilot-ai-panel.library",
-          "group": "navigation"
-        },
-        {
-          "command": "copilot-ai-panel.createFromTemplate",
-          "when": "view == copilot-ai-panel.library",
-          "group": "navigation"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "copilot-ai-panel.usePrompt",
-          "when": "view == copilot-ai-panel.library && viewItem == prompt"
-        },
-        {
-          "command": "copilot-ai-panel.copyToWorkspace",
-          "when": "view == copilot-ai-panel.library && viewItem == prompt"
-        }
-      ]
-    }
+    "yamlValidation": [
+      {
+        "fileMatch": ["*.flow.yaml", "*.flow.yml"],
+        "url": "./schemas/flow.schema.json"
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "copilot-ai-flow.flowEditor",
+        "displayName": "Flow Editor",
+        "selector": [
+          { "filenamePattern": "*.flow.yaml" },
+          { "filenamePattern": "*.flow.yml" }
+        ],
+        "priority": "default"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && node esbuild.webview.mjs",
+    "compile:webview": "node esbuild.webview.mjs",
     "watch": "tsc -watch -p ./",
+    "watch:webview": "node esbuild.webview.mjs --watch",
     "pretest": "npm run compile",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -146,11 +141,17 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^18.x",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^6.19.0",
     "@typescript-eslint/parser": "^6.19.0",
     "@vscode/vsce": "^2.22.0",
+    "@xyflow/react": "^12.3.6",
+    "esbuild": "^0.25.0",
     "eslint": "^8.56.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
     "typescript": "^5.3.0",
     "vitest": "^1.6.1"
   },

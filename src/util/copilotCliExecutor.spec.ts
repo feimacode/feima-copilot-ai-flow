@@ -6,8 +6,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CopilotCliExecutor } from './copilotCliExecutor';
 import * as vscode from 'vscode';
-import type { IPanelContext } from '../context/panelContextBuilder';
-import type { PanelTurn } from '../session/panelConversation';
+import type { IFlowContext } from '../context/flowContextBuilder';
+import type { FlowTurn } from '../session/flowConversation';
 
 // Mock dependencies
 vi.mock('./cliSpawner', () => ({
@@ -17,8 +17,8 @@ vi.mock('./cliSpawner', () => ({
 
 describe('CopilotCliExecutor', () => {
 	let executor: CopilotCliExecutor;
-	let mockContext: IPanelContext;
-	let mockHistory: PanelTurn[];
+	let mockContext: IFlowContext;
+	let mockHistory: FlowTurn[];
 	
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -52,7 +52,7 @@ describe('CopilotCliExecutor', () => {
 					['Developer', 'Previous developer response'],
 					['QA', 'Previous QA response']
 				])
-			} as PanelTurn
+			} as FlowTurn
 		];
 	});
 	
@@ -158,7 +158,7 @@ describe('CopilotCliExecutor', () => {
 			
 			const result = await executor.executeCopilotCli({
 				roleName: 'Developer',
-				systemPrompt: 'You are a senior developer',
+				prompt: 'You are a senior developer',
 				userQuery: 'How should we implement this feature?',
 				context: mockContext,
 				sharedContext: 'Shared project context'
@@ -190,7 +190,7 @@ describe('CopilotCliExecutor', () => {
 			
 			await executor.executeCopilotCli({
 				roleName: 'QA',
-				systemPrompt: 'You are a QA engineer',
+				prompt: 'You are a QA engineer',
 				userQuery: 'What tests should we add?',
 				context: mockContext,
 				history: mockHistory
@@ -218,7 +218,7 @@ describe('CopilotCliExecutor', () => {
 			
 			const result = await executor.executeCopilotCli({
 				roleName: 'Developer',
-				systemPrompt: 'Test',
+				prompt: 'Test',
 				userQuery: 'Test query',
 				context: mockContext
 			});
@@ -241,7 +241,7 @@ describe('CopilotCliExecutor', () => {
 			
 			await executor.executeCopilotCli({
 				roleName: 'Developer',
-				systemPrompt: 'Test',
+				prompt: 'Test',
 				userQuery: 'Test',
 				context: mockContext
 			});
@@ -271,7 +271,7 @@ describe('CopilotCliExecutor', () => {
 			
 			const result = await executor.executeCopilotCli({
 				roleName: 'Developer',
-				systemPrompt: 'Test',
+				prompt: 'Test',
 				userQuery: 'Test',
 				context: mockContext
 			});
@@ -291,7 +291,7 @@ describe('CopilotCliExecutor', () => {
 			
 			const result = await executor.executeCopilotCli({
 				roleName: 'Developer',
-				systemPrompt: 'Test',
+				prompt: 'Test',
 				userQuery: 'Test',
 				context: mockContext
 			});
@@ -310,7 +310,7 @@ describe('CopilotCliExecutor', () => {
 			
 			const result = await executor.executeCopilotCli({
 				roleName: 'Developer',
-				systemPrompt: 'Test',
+				prompt: 'Test',
 				userQuery: 'Test',
 				context: mockContext,
 				token: cancellationTokenSource.token
@@ -342,7 +342,7 @@ describe('CopilotCliExecutor', () => {
 			
 			await executor.executeCopilotCli({
 				roleName: 'Developer',
-				systemPrompt: 'Test',
+				prompt: 'Test',
 				userQuery: 'Test',
 				context: mockContext,
 				onProgress
@@ -365,7 +365,7 @@ describe('CopilotCliExecutor', () => {
 			
 			const result = await executor.executeCopilotCli({
 				roleName: 'Developer',
-				systemPrompt: 'Test',
+				prompt: 'Test',
 				userQuery: 'Test',
 				context: mockContext
 			});
@@ -389,7 +389,7 @@ describe('CopilotCliExecutor', () => {
 			
 			await executor.executeCopilotCli({
 				roleName: 'Developer',
-				systemPrompt: 'Test',
+				prompt: 'Test',
 				userQuery: 'Test',
 				context: mockContext
 			});
@@ -415,7 +415,7 @@ describe('CopilotCliExecutor', () => {
 			
 			await executor.executeCopilotCli({
 				roleName: 'Developer',
-				systemPrompt: 'Test',
+				prompt: 'Test',
 				userQuery: 'Test',
 				context: mockContext
 			});
@@ -441,7 +441,7 @@ describe('CopilotCliExecutor', () => {
 			
 			await executor.executeCopilotCli({
 				roleName: 'Developer',
-				systemPrompt: 'Test',
+				prompt: 'Test',
 				userQuery: 'Test',
 				context: mockContext,
 				sharedContext: 'Important shared information'

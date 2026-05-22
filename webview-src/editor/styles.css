@@ -1,0 +1,487 @@
+/* VS Code-themed styles for the Flow Editor webview */
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	padding: 0;
+	overflow: hidden;
+	background: var(--vscode-editor-background, #1e1e1e);
+	color: var(--vscode-editor-foreground, #d4d4d4);
+	font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+	font-size: var(--vscode-font-size, 13px);
+}
+
+/* ---------------------------------------------------------------------------
+   App shell
+--------------------------------------------------------------------------- */
+
+.app-root {
+	width: 100vw;
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
+}
+
+.canvas-area {
+	flex: 1;
+	min-height: 0;
+	position: relative;
+}
+
+/* ---------------------------------------------------------------------------
+   Toolbar
+--------------------------------------------------------------------------- */
+
+.toolbar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 5px 12px;
+	background: var(--vscode-titleBar-activeBackground, #2d2d2d);
+	border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
+	flex-shrink: 0;
+	min-height: 36px;
+}
+
+.toolbar-title {
+	font-weight: 600;
+	font-size: 12px;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: var(--vscode-titleBar-activeForeground, #cccccc);
+	margin-right: auto;
+}
+
+.toolbar-btn {
+	padding: 3px 10px;
+	background: var(--vscode-button-background, #0e639c);
+	color: var(--vscode-button-foreground, #ffffff);
+	border: none;
+	border-radius: 2px;
+	cursor: pointer;
+	font-size: 12px;
+	font-family: inherit;
+	line-height: 1.6;
+}
+
+.toolbar-btn:hover {
+	background: var(--vscode-button-hoverBackground, #1177bb);
+}
+
+.toolbar-btn.secondary {
+	background: var(--vscode-button-secondaryBackground, #3a3d41);
+	color: var(--vscode-button-secondaryForeground, #cccccc);
+}
+
+.toolbar-btn.secondary:hover {
+	background: var(--vscode-button-secondaryHoverBackground, #45494e);
+}
+
+/* ---------------------------------------------------------------------------
+   Empty state
+--------------------------------------------------------------------------- */
+
+.empty-state {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	color: var(--vscode-descriptionForeground, #888);
+	text-align: center;
+	padding: 40px;
+}
+
+.empty-state p {
+	margin: 0;
+	max-width: 400px;
+	line-height: 1.6;
+}
+
+.empty-state code {
+	background: var(--vscode-textCodeBlock-background, #2d2d2d);
+	border-radius: 3px;
+	padding: 1px 5px;
+	font-family: var(--vscode-editor-font-family, monospace);
+	font-size: 0.9em;
+}
+
+/* ---------------------------------------------------------------------------
+   React Flow overrides (match VS Code theme)
+--------------------------------------------------------------------------- */
+
+.react-flow__background {
+	background: var(--vscode-editor-background, #1e1e1e);
+}
+
+.react-flow__controls button {
+	background: var(--vscode-editor-background, #1e1e1e);
+	border-color: var(--vscode-panel-border, #3c3c3c);
+	color: var(--vscode-editor-foreground, #d4d4d4);
+	fill: var(--vscode-editor-foreground, #d4d4d4);
+}
+
+.react-flow__controls button:hover {
+	background: var(--vscode-list-hoverBackground, #2a2d2e);
+}
+
+.react-flow__minimap {
+	background: var(--vscode-sideBar-background, #252526);
+	border: 1px solid var(--vscode-panel-border, #3c3c3c);
+	border-radius: 4px;
+}
+
+.react-flow__edge-path {
+	stroke: var(--vscode-focusBorder, #007acc);
+	stroke-width: 2;
+}
+
+/* ---------------------------------------------------------------------------
+   Flow nodes
+--------------------------------------------------------------------------- */
+
+.flow-node {
+	background: var(--vscode-editor-background, #1e1e1e);
+	border: 1px solid var(--vscode-panel-border, #474747);
+	border-radius: 6px;
+	padding: 8px 10px;
+	min-width: 220px;
+	max-width: 320px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+	font-size: 12px;
+}
+
+.flow-node:hover {
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.meta-node {
+	border-color: var(--vscode-focusBorder, #007acc);
+	border-width: 2px;
+}
+
+.role-node {
+	border-color: var(--vscode-panel-border, #474747);
+}
+
+.stage-node {
+	border-color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
+	border-style: dashed;
+	border-width: 1px;
+	background: var(--vscode-sideBar-background, #252526);
+}
+
+/* ---------------------------------------------------------------------------
+   Compact node layout
+--------------------------------------------------------------------------- */
+
+.compact-header {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+}
+
+.node-badge {
+	flex-shrink: 0;
+	font-size: 9px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	padding: 1px 5px;
+	border-radius: 3px;
+	background: var(--vscode-badge-background, #4d4d4d);
+	color: var(--vscode-badge-foreground, #fff);
+}
+
+.meta-badge {
+	background: var(--vscode-focusBorder, #007acc);
+	color: #fff;
+}
+
+.stage-badge {
+	background: var(--vscode-gitDecoration-modifiedResourceForeground, #c8a03c);
+	color: #000;
+}
+
+.compact-title {
+	flex: 1;
+	font-weight: 600;
+	font-size: 12px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	min-width: 0;
+}
+
+.compact-subtitle {
+	margin-top: 3px;
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground, #888);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-style: italic;
+}
+
+.stage-iterations {
+	flex-shrink: 0;
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--vscode-descriptionForeground, #888);
+	background: var(--vscode-badge-background, #4d4d4d);
+	border-radius: 3px;
+	padding: 1px 4px;
+}
+
+/* Compact icon buttons (edit / delete) */
+
+.icon-btn {
+	flex-shrink: 0;
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	font-size: 12px;
+	padding: 1px 3px;
+	line-height: 1;
+	border-radius: 2px;
+	color: var(--vscode-descriptionForeground, #888);
+	opacity: 0.7;
+	transition: opacity 0.12s, color 0.12s;
+}
+
+.icon-btn:hover {
+	opacity: 1;
+}
+
+.edit-btn:hover {
+	color: var(--vscode-editor-foreground, #d4d4d4);
+}
+
+.delete-btn:hover {
+	color: var(--vscode-errorForeground, #f48771);
+}
+
+/* ---------------------------------------------------------------------------
+   Edit dialog
+--------------------------------------------------------------------------- */
+
+.dialog-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.45);
+	z-index: 1000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.dialog-flow {
+	background: var(--vscode-editorWidget-background, #252526);
+	border: 1px solid var(--vscode-editorWidget-border, #454545);
+	border-radius: 5px;
+	width: 420px;
+	max-height: 82vh;
+	display: flex;
+	flex-direction: column;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.dialog-header {
+	display: flex;
+	align-items: center;
+	padding: 10px 14px;
+	border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
+	flex-shrink: 0;
+}
+
+.dialog-title {
+	flex: 1;
+	font-weight: 600;
+	font-size: 13px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.dialog-close {
+	flex-shrink: 0;
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	color: var(--vscode-icon-foreground, #bbb);
+	font-size: 14px;
+	padding: 2px 5px;
+	line-height: 1;
+	border-radius: 2px;
+	opacity: 0.7;
+	transition: opacity 0.12s;
+}
+
+.dialog-close:hover {
+	opacity: 1;
+	color: var(--vscode-editor-foreground, #d4d4d4);
+}
+
+.dialog-body {
+	padding: 14px 16px;
+	overflow-y: auto;
+	flex: 1;
+}
+
+/* Form elements inside the dialog (mirrors .flow-node form styles) */
+
+.dialog-body label {
+	display: flex;
+	flex-direction: column;
+	margin-bottom: 9px;
+	color: var(--vscode-descriptionForeground, #9d9d9d);
+	gap: 4px;
+}
+
+.dialog-body .hint {
+	font-size: 10px;
+	opacity: 0.7;
+}
+
+.dialog-body input,
+.dialog-body textarea,
+.dialog-body select {
+	background: var(--vscode-input-background, #3c3c3c);
+	color: var(--vscode-input-foreground, #cccccc);
+	border: 1px solid var(--vscode-input-border, #3c3c3c);
+	border-radius: 2px;
+	padding: 4px 7px;
+	font-size: 12px;
+	font-family: inherit;
+	width: 100%;
+	outline: none;
+	resize: vertical;
+}
+
+.dialog-body textarea {
+	font-family: var(--vscode-editor-font-family, 'Consolas', 'Courier New', monospace);
+	font-size: 11px;
+	line-height: 1.5;
+}
+
+.dialog-body input:focus,
+.dialog-body textarea:focus,
+.dialog-body select:focus {
+	border-color: var(--vscode-focusBorder, #007acc);
+}
+
+.dialog-body select option {
+	background: var(--vscode-dropdown-background, #3c3c3c);
+	color: var(--vscode-dropdown-foreground, #cccccc);
+}
+
+.stage-readonly-hint {
+	color: var(--vscode-descriptionForeground, #888);
+	font-size: 12px;
+	line-height: 1.6;
+	margin: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Shared .row utility (used in both dialog and nodes)
+--------------------------------------------------------------------------- */
+
+.row {
+	display: flex;
+	gap: 8px;
+}
+
+.row label {
+	flex: 1;
+	min-width: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Stage group container (React Flow parent node)
+--------------------------------------------------------------------------- */
+
+.stage-group {
+	width: 100%;
+	height: 100%;
+	background: rgba(37, 37, 38, 0.55);
+	border: 1.5px dashed var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
+	border-radius: 8px;
+	box-sizing: border-box;
+	position: relative;
+}
+
+.stage-group-header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 9px 10px;
+	border-bottom: 1px dashed rgba(226, 192, 141, 0.35);
+	background: rgba(226, 192, 141, 0.06);
+	border-radius: 7px 7px 0 0;
+}
+
+.stage-group-title {
+	flex: 1;
+	font-weight: 600;
+	font-size: 12px;
+	color: var(--vscode-editor-foreground, #d4d4d4);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.stage-group-subflow {
+	font-size: 10px;
+	color: var(--vscode-descriptionForeground, #888);
+	font-style: italic;
+	white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   Canvas meta panel overlay (React Flow <Panel> top-left)
+--------------------------------------------------------------------------- */
+
+.canvas-meta-flow {
+	background: var(--vscode-editor-background, #1e1e1e);
+	border: 1px solid var(--vscode-panel-border, #474747);
+	border-radius: 6px;
+	padding: 8px 10px;
+	max-width: 280px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+	pointer-events: auto;
+}
+
+.canvas-meta-header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.canvas-meta-name {
+	flex: 1;
+	font-weight: 600;
+	font-size: 13px;
+	color: var(--vscode-editor-foreground, #d4d4d4);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.canvas-meta-desc {
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground, #888);
+	margin-top: 4px;
+	line-height: 1.4;
+	overflow: hidden;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+}

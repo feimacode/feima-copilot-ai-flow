@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { IPanelContext } from '../context/panelContextBuilder';
-import { PanelTurn } from '../session/panelConversation';
+import { IFlowContext } from '../context/flowContextBuilder';
+import { FlowTurn } from '../session/flowConversation';
 
 // Dynamic import for ESM-only @github/copilot package
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -23,6 +23,13 @@ async function getSdk() {
 // Type aliases for SDK types (using unknown for proper type safety)
 type SweCustomAgent = unknown; // Will be properly typed from SDK at runtime
 type SessionEvent = unknown;   // Will be properly typed from SDK at runtime
+type Session = unknown;        // Will be properly typed from SDK at runtime
+type LocalSessionManager = unknown; // Will be properly typed from SDK at runtime
+
+/**
+ * Execution mode for GitHub Copilot
+ */
+export type ExecutionMode = 'sdk-session' | 'cli-spawn' | 'sdk-query';
 
 /**
  * Options for executing GitHub Copilot SDK
@@ -31,15 +38,15 @@ export interface CopilotSdkOptions {
 	/** Role name */
 	roleName: string;
 	/** Role system prompt */
-	systemPrompt: string;
+	prompt: string;
 	/** User query/task */
 	userQuery: string;
 	/** VS Code context (workspace, files, etc.) */
-	context: IPanelContext;
+	context: IFlowContext;
 	/** Shared context across roles */
 	sharedContext?: string;
 	/** Conversation history */
-	history?: PanelTurn[];
+	history?: FlowTurn[];
 	/** Custom agent to use */
 	customAgent?: SweCustomAgent;
 	/** Model to use */
@@ -48,6 +55,10 @@ export interface CopilotSdkOptions {
 	token?: vscode.CancellationToken;
 	/** Progress callback */
 	onProgress?: (message: string) => void;
+	/** Execution mode (defaults to 'sdk-query' for lightweight execution) */
+	mode?: ExecutionMode;
+	/** Session ID for resuming existing session (sdk-session mode only) */
+	sessionId?: string;
 }
 
 /**
@@ -58,14 +69,23 @@ export interface CopilotSdkResult {
 	content: string;
 	model: string;
 	error?: string;
+	/** Session ID for persistent sessions (sdk-session mode) */
+	sessionId?: string;
+	/** Execution mode used */
+	mode?: ExecutionMode;
 }
 
 /**
  * GitHub Copilot SDK Executor
  * Handles invocation of GitHub Copilot SDK for role-based tasks
+ * Supports three execution modes:
+ * - 'sdk-query': Lightweight stateless query (current default)
+ * - 'sdk-session': Persistent session with history saved to ~/.copilot/session-state/
+ * - 'cli-spawn': Spawn gh copilot CLI as subprocess
  */
 export class CopilotSdkExecutor {
 	private availableAgents: SweCustomAgent[] | undefined;
+	private sessionManager: LocalSessionManager | undefined;
 
 	/**
 	 * Get available custom agents
@@ -191,7 +211,7 @@ export class CopilotSdkExecutor {
 
 		// System prompt (role definition)
 		parts.push('# Role');
-		parts.push(options.systemPrompt);
+		parts.push(options.prompt);
 		parts.push('');
 
 		// Shared context
@@ -244,8 +264,34 @@ export class CopilotSdkExecutor {
 
 	/**
 	 * Execute GitHub Copilot SDK for a role
+	 * Routes to appropriate execution mode based on options.mode
 	 */
 	async executeCopilotSdk(options: CopilotSdkOptions): Promise<CopilotSdkResult> {
+		const mode = options.mode || 'sdk-query';
+		
+		// Route to appropriate execution mode
+		switch (mode) {
+			case 'sdk-session':
+				return this.executeViaSdkSession(options);
+			case 'cli-spawn':
+				return this.executeViaCliSpawn(options);
+			case 'sdk-query':
+				return this.executeViaSdkQuery(options);
+			default:
+				return {
+					roleName: options.roleName,
+					content: '',
+					model: options.model || 'claude-sonnet-4.5',
+					error: `Unknown execution mode: ${mode}`
+				};
+		}
+	}
+	
+	/**
+	 * Execute via SDK query (lightweight, stateless)
+	 * Original implementation - good for quick parallel role execution
+	 */
+	private async executeViaSdkQuery(options: CopilotSdkOptions): Promise<CopilotSdkResult> {
 		try {
 			// Check availability
 			const availability = await this.checkAvailability();
@@ -254,7 +300,8 @@ export class CopilotSdkExecutor {
 					roleName: options.roleName,
 					content: '',
 					model: options.model || 'claude-sonnet-4.5',
-					error: availability.error
+					error: availability.error,
+					mode: 'sdk-query'
 				};
 			}
 
@@ -329,7 +376,8 @@ export class CopilotSdkExecutor {
 					roleName: options.roleName,
 					content: '',
 					model: modelUsed,
-					error: 'SDK returned empty output'
+					error: 'SDK returned empty output',
+					mode: 'sdk-query'
 				};
 			}
 
@@ -338,7 +386,8 @@ export class CopilotSdkExecutor {
 			return {
 				roleName: options.roleName,
 				content: content.trim(),
-				model: modelUsed
+				model: modelUsed,
+				mode: 'sdk-query'
 			};
 
 		} catch (error) {
@@ -351,13 +400,269 @@ export class CopilotSdkExecutor {
 				errorMessage = error.message;
 			}
 
-			console.error(`[CopilotSdkExecutor] Error executing SDK for ${options.roleName}:`, error);
+			console.error(`[CopilotSdkExecutor] Error executing SDK query for ${options.roleName}:`, error);
 
 			return {
 				roleName: options.roleName,
 				content: '',
 				model: options.model || 'claude-sonnet-4.5',
-				error: errorMessage
+				error: errorMessage,
+				mode: 'sdk-query'
+			};
+		}
+	}
+	
+	/**
+	 * Execute via SDK session (persistent, with history saved to disk)
+	 * Creates/resumes session in ~/.copilot/session-state/*.jsonl
+	 */
+	private async executeViaSdkSession(options: CopilotSdkOptions): Promise<CopilotSdkResult> {
+		try {
+			// Check availability
+			const availability = await this.checkAvailability();
+			if (!availability.available) {
+				// Fallback to CLI spawn if SDK not available
+				console.warn('[CopilotSdkExecutor] SDK not available, falling back to CLI spawn');
+				return this.executeViaCliSpawn(options);
+			}
+			
+			// Get SDK and session manager
+			const sdk = await getSdk();
+			if (!this.sessionManager) {
+				this.sessionManager = new sdk.LocalSessionManager() as LocalSessionManager;
+			}
+			
+			// Get authentication
+			const authInfo = await this.getAuthInfo();
+			if (!authInfo) {
+				throw new Error('Authentication required');
+			}
+			
+			// Get working directory
+			const workingDirectory = options.context.workspace?.folders?.[0] || process.cwd();
+			
+			// Build prompt
+			const prompt = this.buildPrompt(options);
+			
+			options.onProgress?.(`${options.roleName}: Creating session...`);
+			
+			// Create or resume session
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const sessionOptions: any = {
+				model: options.model || 'claude-sonnet-4.5',
+				workingDirectory,
+				authInfo,
+				selectedCustomAgent: options.customAgent,
+				enableStreaming: true
+			};
+			
+			let session: Session;
+			let sessionId: string;
+			
+			if (options.sessionId) {
+				// Resume existing session
+				session = await (this.sessionManager as any).getSession(options.sessionId, sessionOptions);
+				sessionId = options.sessionId;
+				options.onProgress?.(`${options.roleName}: Resuming session ${sessionId}...`);
+			} else {
+				// Create new session
+				session = await (this.sessionManager as any).createSession(sessionOptions);
+				sessionId = (session as any).sessionId;
+				options.onProgress?.(`${options.roleName}: Session ${sessionId} created`);
+			}
+			
+			console.log(`[CopilotSdkExecutor] ✅ Using SDK session ${sessionId}`);
+			
+			// Send prompt to session
+			options.onProgress?.(`${options.roleName}: Sending prompt...`);
+			const responseStream = await (session as any).send(prompt);
+			
+			let content = '';
+			const modelUsed = options.model || 'claude-sonnet-4.5';
+			
+			// Process response stream
+			for await (const event of responseStream) {
+				if (options.token?.isCancellationRequested) {
+					throw new vscode.CancellationError();
+				}
+				
+				await this.handleEvent(event, options, (text) => {
+					content += text;
+				});
+			}
+			
+			if (!content.trim()) {
+				return {
+					roleName: options.roleName,
+					content: '',
+					model: modelUsed,
+					error: 'Session returned empty output',
+					sessionId,
+					mode: 'sdk-session'
+				};
+			}
+			
+			console.log(`[CopilotSdkExecutor] ✅ SDK session ${sessionId} completed for ${options.roleName}`);
+			
+			return {
+				roleName: options.roleName,
+				content: content.trim(),
+				model: modelUsed,
+				sessionId,
+				mode: 'sdk-session'
+			};
+			
+		} catch (error) {
+			let errorMessage = 'Unknown error';
+			
+			if (error instanceof vscode.CancellationError) {
+				errorMessage = 'Execution cancelled';
+			} else if (error instanceof Error) {
+				errorMessage = error.message;
+			}
+			
+			console.error(`[CopilotSdkExecutor] Error executing SDK session for ${options.roleName}:`, error);
+			
+			// Try fallback to CLI spawn
+			if (!options.sessionId) { // Don't fallback if resuming specific session
+				console.warn('[CopilotSdkExecutor] Falling back to CLI spawn');
+				return this.executeViaCliSpawn(options);
+			}
+			
+			return {
+				roleName: options.roleName,
+				content: '',
+				model: options.model || 'claude-sonnet-4.5',
+				error: errorMessage,
+				mode: 'sdk-session'
+			};
+		}
+	}
+	
+	/**
+	 * Execute via CLI spawn (subprocess)
+	 * Spawns `gh copilot` as a child process
+	 */
+	private async executeViaCliSpawn(options: CopilotSdkOptions): Promise<CopilotSdkResult> {
+		try {
+			options.onProgress?.(`${options.roleName}: Starting CLI process...`);
+			
+			// Build the full prompt
+			const prompt = this.buildPrompt(options);
+			
+			// Spawn gh copilot CLI
+			const { spawn } = await import('child_process');
+			
+			// Build CLI arguments
+			const args = ['copilot'];
+			
+			if (options.model) {
+				args.push('--model', options.model);
+			}
+			
+			if (options.customAgent && typeof options.customAgent === 'string') {
+				args.push('--agent', options.customAgent);
+			}
+			
+			// Add non-interactive flag for programmatic usage
+			args.push('--non-interactive');
+			
+			console.log(`[CopilotSdkExecutor] Spawning CLI: gh ${args.join(' ')}`);
+			
+			const child = spawn('gh', args, {
+				stdio: ['pipe', 'pipe', 'pipe'],
+				cwd: options.context.workspace?.folders?.[0] || process.cwd()
+			});
+			
+			let stdout = '';
+			let stderr = '';
+			
+			child.stdout?.on('data', (data) => {
+				const chunk = data.toString();
+				stdout += chunk;
+				// Show progress with streaming output
+				const preview = chunk.trim().substring(0, 50);
+				if (preview) {
+					options.onProgress?.(`${options.roleName}: ${preview}...`);
+				}
+			});
+			
+			child.stderr?.on('data', (data) => {
+				stderr += data.toString();
+			});
+			
+			// Write prompt to stdin
+			child.stdin?.write(prompt);
+			child.stdin?.end();
+			
+			// Wait for process to complete
+			const exitCode = await new Promise<number>((resolve) => {
+				child.on('close', (code) => resolve(code || 0));
+				
+				// Handle cancellation
+				if (options.token) {
+					options.token.onCancellationRequested(() => {
+						child.kill('SIGTERM');
+						resolve(-1);
+					});
+				}
+			});
+			
+			if (exitCode === -1) {
+				return {
+					roleName: options.roleName,
+					content: '',
+					model: options.model || 'gh-copilot-cli',
+					error: 'Execution cancelled',
+					mode: 'cli-spawn'
+				};
+			}
+			
+			if (exitCode !== 0) {
+				const errorMsg = stderr || stdout || `CLI exited with code ${exitCode}`;
+				return {
+					roleName: options.roleName,
+					content: '',
+					model: options.model || 'gh-copilot-cli',
+					error: `CLI error: ${errorMsg}`,
+					mode: 'cli-spawn'
+				};
+			}
+			
+			if (!stdout.trim()) {
+				return {
+					roleName: options.roleName,
+					content: '',
+					model: options.model || 'gh-copilot-cli',
+					error: 'CLI returned empty output',
+					mode: 'cli-spawn'
+				};
+			}
+			
+			console.log(`[CopilotSdkExecutor] ✅ CLI spawn completed for ${options.roleName}`);
+			
+			return {
+				roleName: options.roleName,
+				content: stdout.trim(),
+				model: options.model || 'gh-copilot-cli',
+				mode: 'cli-spawn'
+			};
+			
+		} catch (error) {
+			let errorMessage = 'Unknown error';
+			
+			if (error instanceof Error) {
+				errorMessage = error.message;
+			}
+			
+			console.error(`[CopilotSdkExecutor] Error executing CLI for ${options.roleName}:`, error);
+			
+			return {
+				roleName: options.roleName,
+				content: '',
+				model: options.model || 'gh-copilot-cli',
+				error: errorMessage,
+				mode: 'cli-spawn'
 			};
 		}
 	}

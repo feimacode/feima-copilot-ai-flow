@@ -13,7 +13,8 @@
     "resolveJsonModule": true,
     "jsx": "react",
     "jsxFactory": "vscpp",
-    "jsxFragmentFactory": "vscppf"
+    "jsxFragmentFactory": "vscppf",
+    "types": ["node", "vscode"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", ".vscode-test"]

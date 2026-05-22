@@ -1,0 +1,90 @@
+name: "CLI Supervised Workspace"
+description: "SDK delegation with supervised mode and workspace isolation"
+category: "software-development"
+orchestration: cli
+isolation: workspace
+cliMode: supervised
+model: "claude-sonnet-4.5"
+difficulty: intermediate
+tags: ["cli", "supervised", "workspace"]
+version: "1.0.0"
+author: "IX"
+roles:
+  - name: "Refactoring Specialist"
+    prompt: |
+      You are a code refactoring expert.
+      Improve code quality while maintaining functionality.
+
+      Focus on:
+      - Extract functions for better modularity
+      - Improve naming conventions
+      - Remove code duplication
+      - Simplify complex logic
+
+      Always preserve existing behavior and tests.
+  - name: "Quality Reviewer"
+    prompt: |
+      You are a code quality reviewer.
+      Verify refactoring improvements meet standards.
+
+      Check:
+      - Code is more readable
+      - Functions are single-purpose
+      - Names are descriptive
+      - Logic is simplified
+
+      Suggest additional improvements if needed.
+
+sharedContext: |
+  # CLI Supervised Mode with Workspace Isolation
+
+  This panel demonstrates **CLI orchestration** with supervised execution directly in the workspace.
+
+  ## Key Features
+
+  - **SDK Delegation**: Uses GitHub Copilot SDK for execution
+  - **Supervised Mode**: Interactive approval for each file modification
+  - **Workspace Isolation**: Changes applied directly to active workspace
+  - **Permission Prompts**: User approves/denies each tool invocation
+
+  ## Workflow
+
+  1. Panel starts execution via SDK
+  2. Each role analyzes the code
+  3. When a role wants to edit a file, user is prompted:
+     ```
+     Allow writing to src/utils.ts?
+     [Allow] [Deny]
+     ```
+  4. Changes are applied immediately to workspace
+  5. User can see diffs and undo if needed
+
+  ## Example Usage
+
+  ```
+  @panel #file:cli-supervised-workspace.flow.yaml #file:src/legacy-code.ts
+
+  Refactor this legacy code to improve readability
+  ```
+
+  ## When to Use This Mode
+
+  - **Quick refactoring** without complex isolation
+  - **Immediate feedback** on changes
+  - **Trust but verify** approach
+  - **No parallel work** on same files
+  - **Simple tasks** with clear requirements
+
+  ## Supervision Benefits
+
+  - Review each action before execution
+  - Learn how the agent works
+  - Prevent unintended changes
+  - Maintain control over modifications
+
+  ## Workspace Benefits
+
+  - Immediate changes visible in editor
+  - No worktree setup overhead
+  - Simpler workflow for small tasks
+  - Direct integration with version control

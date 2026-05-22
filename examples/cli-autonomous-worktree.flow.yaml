@@ -1,0 +1,207 @@
+name: "CLI Autonomous Worktree"
+description: "SDK delegation with autonomous mode and worktree isolation"
+category: "software-development"
+orchestration: cli
+isolation: worktree
+cliMode: autonomous
+model: "claude-sonnet-4.5"
+customAgent: "___vscode_default___"
+difficulty: advanced
+tags: ["cli", "autonomous", "worktree", "isolation"]
+version: "1.0.0"
+author: "IX"
+roles:
+  - name: "Feature Developer"
+    prompt: |
+      You are an autonomous feature developer.
+      Implement complete features from specifications.
+
+      Process:
+      1. Read existing code to understand context
+      2. Create new files as needed
+      3. Modify existing files carefully
+      4. Add tests for new functionality
+      5. Update documentation
+
+      Write production-quality code with proper error handling.
+  - name: "Test Engineer"
+    prompt: |
+      You are a test automation engineer.
+      Ensure all new code has comprehensive test coverage.
+
+      For each feature:
+      - Generate unit tests
+      - Add integration tests if needed
+      - Test edge cases and error conditions
+      - Verify tests pass
+
+      Use the project's testing framework and patterns.
+
+sharedContext: |
+  # CLI Autonomous Mode with Worktree Isolation
+
+  This panel demonstrates **CLI orchestration** with autonomous execution in an isolated Git worktree.
+
+  ## Key Features
+
+  - **SDK Delegation**: Uses GitHub Copilot SDK for background execution
+  - **Autonomous Mode**: Minimal user interaction, auto-executes approved actions
+  - **Worktree Isolation**: Creates separate Git worktree for safe experimentation
+  - **Session Persistence**: Full session history saved to `~/.copilot/session-state/`
+
+  ## Worktree Workflow
+
+  1. Panel starts → creates new worktree:
+     ```
+     ~/project/.git/worktrees/copilot-cli-<uuid>/
+     ~/copilot-cli-<uuid>/  (working directory)
+     ```
+
+  2. All changes happen in isolated worktree
+  3. Your main workspace remains untouched
+  4. Review changes when complete
+  5. Apply to main workspace or discard
+
+  ## Autonomous Execution
+
+  - Agent makes decisions without constant prompts
+  - File edits auto-approved within worktree
+  - Shell commands follow safety guidelines
+  - Batch confirmations for major operations
+
+  ## Example Usage
+
+  ```
+  @panel #file:cli-autonomous-worktree.flow.yaml
+
+  Add user authentication feature with JWT tokens:
+  - Login endpoint
+  - Token validation middleware
+  - Password hashing
+  - Unit tests
+  ```
+
+  ## Execution Flow
+
+  1. **Worktree Creation**: Creates isolated branch `copilot-cli-abc123`
+  2. **Feature Development**: Agent implements feature autonomously
+  3. **Testing**: Agent runs tests to verify functionality
+  4. **Completion**: Changes committed to worktree
+  5. **Review**: User reviews changes in separate directory
+  6. **Apply**: Merge changes to main workspace when ready
+
+  ## When to Use This Mode
+
+  - **Large features** requiring multiple files
+  - **Experimental changes** you want to test first
+  - **Parallel work** while you edit other files
+  - **High-confidence tasks** with clear requirements
+  - **Learning sessions** where mistakes are acceptable
+
+  ## Safety Features
+
+  - Changes isolated from main workspace
+  - Can discard entire worktree if needed
+  - Review diffs before merging
+  - Full rollback capability
+  - No risk to active work
+
+  ## Session Persistence
+
+  All execution is saved to disk:
+  ```
+  ~/.copilot/session-state/cli-<uuid>.jsonl
+  ```
+
+  Session includes:
+  - All role interactions
+  - Tool invocations
+  - File modifications
+  - Error messages
+  - Complete history
+
+  ## Resuming Sessions
+
+  ```
+  # List recent sessions
+  AI Panel: List Background Sessions
+
+  # Resume specific session
+  AI Panel: Resume Session <session-id>
+
+  # View session in VS Code
+  Right-click session → Open as Editor
+  ```
+
+  ## Post-Execution Actions
+
+  ### Review Changes
+  ```bash
+  cd ~/copilot-cli-abc123
+  git diff main  # See all changes
+  ```
+
+  ### Apply to Main Workspace
+  ```
+  # In VS Code:
+  1. Right-click session → "Apply Changes"
+  2. Review diffs in VS Code
+  3. Accept or reject changes
+  ```
+
+  ### Discard Changes
+  ```
+  AI Panel: Delete Session and Worktree
+  ```
+
+  ## Advanced Usage
+
+  ### With Custom Agent
+  ```yaml
+  orchestration: cli
+  isolation: worktree
+  cliMode: autonomous
+  customAgent: "feature-developer"  # Your custom agent
+  ```
+
+  ### With Specific Model
+  ```yaml
+  orchestration: cli
+  isolation: worktree
+  cliMode: autonomous
+  model: "gpt-5"  # Use GPT-5 for complex reasoning
+  ```
+
+  ### Multiple Specialized Roles
+  ```yaml
+  roles:
+    - name: "Backend Developer"
+      prompt: |
+        Focus on server-side implementation
+      model: "claude-sonnet-4.5"
+    - name: "Frontend Developer"
+      prompt: |
+        Focus on UI components
+      model: "gpt-5"
+    - name: "Test Engineer"
+      prompt: |
+        Ensure quality and coverage
+      model: "claude-haiku-4.5"  # Faster for tests
+  ```
+
+  ## Troubleshooting
+
+  ### Worktree Creation Failed
+  - Ensure Git repository is clean
+  - Check for existing worktrees: `git worktree list`
+  - Remove stale worktrees: `git worktree prune`
+
+  ### Session Not Persisting
+  - Verify `~/.copilot/` directory exists
+  - Check file permissions
+  - Ensure sufficient disk space
+
+  ### Agent Stuck or Slow
+  - Check VS Code Output → "GitHub Copilot"
+  - Monitor CPU usage
+  - Consider using faster model (haiku)

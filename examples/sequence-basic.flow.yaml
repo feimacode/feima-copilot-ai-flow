@@ -1,0 +1,47 @@
+name: "Basic Sequential Discussion"
+description: "Simple two-role sequential discussion using language model API"
+category: "software-development"
+orchestration: sequence
+difficulty: beginner
+tags:
+  - basic
+  - learning
+  - sequence
+version: "1.0.0"
+author: IX
+tools:
+  - copilot_readFile
+  - copilot_findTextInFiles
+roles:
+  - name: Architect
+    prompt: |
+      You are a software architect with expertise in system design.
+      Focus on high-level design decisions, patterns, and architecture.
+      Consider scalability, maintainability, and best practices.
+  - name: Developer
+    prompt: |
+      You are a practical developer who implements solutions.
+      Focus on concrete implementation details and code quality.
+      Build upon the architect's recommendations.
+sharedContext: |
+  # Sequential Execution Mode
+
+  This panel demonstrates **sequential orchestration** where roles respond one after another.
+  Each role can see the previous role's response and build upon it.
+
+  ## When to Use Sequential Mode
+
+  - Depth-first reasoning with chain-of-thought
+  - Building upon previous answers
+  - Step-by-step problem solving
+  - Refinement through multiple perspectives
+
+  ## Example Usage
+
+  ```
+  @panel #file:sequence-basic.flow.yaml
+
+  Design a REST API for a todo list application
+  ```
+
+  The Architect will first provide high-level design, then the Developer will add implementation details.

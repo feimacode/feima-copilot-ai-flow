@@ -4,80 +4,65 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { LibraryTreeProvider, LibraryItem } from '../ui/browserView';
+import { GalleryViewProvider } from '../ui/galleryViewProvider';
 
-export function registerCommands(
-	context: vscode.ExtensionContext,
-	treeProvider: LibraryTreeProvider
-) {
+export function registerCommands(context: vscode.ExtensionContext) {
 	
-	// Browse prompt library
+	// Browse gallery
 	context.subscriptions.push(
-		vscode.commands.registerCommand('copilot-ai-panel.browse', async () => {
-			await vscode.commands.executeCommand('copilot-ai-panel.library.focus');
+		vscode.commands.registerCommand('copilot-ai-flow.browse', () => {
+			GalleryViewProvider.open(context);
 		})
 	);
 	
-	// Search prompts
+	// Search flows — open the gallery panel (search box is inline in the webview)
 	context.subscriptions.push(
-		vscode.commands.registerCommand('copilot-ai-panel.search', async () => {
-			const query = await vscode.window.showInputBox({
-				prompt: 'Search prompts by name, tag, or category',
-				placeHolder: 'e.g., sprint, architecture, review'
+		vscode.commands.registerCommand('copilot-ai-flow.search', () => {
+			GalleryViewProvider.open(context);
+		})
+	);
+	
+	// Use prompt — accepts a file URI or path string
+	context.subscriptions.push(
+		vscode.commands.registerCommand('copilot-ai-flow.usePrompt', async (filePathOrUri: string | vscode.Uri) => {
+			const uri = typeof filePathOrUri === 'string'
+				? vscode.Uri.file(filePathOrUri)
+				: filePathOrUri;
+			await vscode.commands.executeCommand('workbench.action.chat.open', {
+				query: `@flow #file:${uri.fsPath} `
 			});
-			
-			if (query) {
-				vscode.window.showInformationMessage(`Search for: ${query} (coming soon)`);
-			}
 		})
 	);
 	
-	// Use prompt
+	// Copy prompt to workspace — accepts a file URI or path string
 	context.subscriptions.push(
-		vscode.commands.registerCommand('copilot-ai-panel.usePrompt', async (item: LibraryItem) => {
-			if (item.filePath) {
-				const uri = vscode.Uri.file(item.filePath);
-				const relativePath = vscode.workspace.asRelativePath(uri);
-				const chatInput = `@panel #file:${uri.fsPath} `;
-				
-				// Insert into chat
-				await vscode.commands.executeCommand('workbench.action.chat.open', {
-					query: chatInput
-				});
-			}
-		})
-	);
-	
-	// Copy prompt to workspace
-	context.subscriptions.push(
-		vscode.commands.registerCommand('copilot-ai-panel.copyToWorkspace', async (item: LibraryItem) => {
+		vscode.commands.registerCommand('copilot-ai-flow.copyToWorkspace', async (filePathOrUri: string | vscode.Uri) => {
 			const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 			if (!workspaceFolder) {
 				vscode.window.showErrorMessage('Please open a workspace first');
 				return;
 			}
-			
-			if (!item.filePath) {
-				return;
-			}
-			
+
+			const sourceUri = typeof filePathOrUri === 'string'
+				? vscode.Uri.file(filePathOrUri)
+				: filePathOrUri;
+
 			// Ask where to save
 			const targetFolder = await vscode.window.showInputBox({
 				prompt: 'Enter folder path (relative to workspace root)',
 				value: 'prompts',
 				placeHolder: 'prompts'
 			});
-			
+
 			if (!targetFolder) {
 				return;
 			}
-			
+
 			// Create target directory
 			const targetDir = vscode.Uri.joinPath(workspaceFolder.uri, targetFolder);
 			await vscode.workspace.fs.createDirectory(targetDir);
-			
+
 			// Copy file
-			const sourceUri = vscode.Uri.file(item.filePath);
 			const fileName = sourceUri.path.split('/').pop() || 'prompt.md';
 			const targetUri = vscode.Uri.joinPath(targetDir, fileName);
 			
@@ -94,7 +79,7 @@ export function registerCommands(
 				await vscode.window.showTextDocument(targetUri);
 			} else if (action === 'Use Now') {
 				await vscode.commands.executeCommand('workbench.action.chat.open', {
-					query: `@panel #file:${targetUri.fsPath} `
+					query: `@flow #file:${targetUri.fsPath} `
 				});
 			}
 		})
@@ -102,7 +87,7 @@ export function registerCommands(
 	
 	// Create from template
 	context.subscriptions.push(
-		vscode.commands.registerCommand('copilot-ai-panel.createFromTemplate', async () => {
+		vscode.commands.registerCommand('copilot-ai-flow.createFromTemplate', async () => {
 			const template = await vscode.window.showQuickPick([
 				{ label: 'Sprint Planning', description: '4 roles: Dev, QA, PO, Tech Lead', value: 'sprint' },
 				{ label: 'Architecture Review', description: '3 roles: Solutions, Security, Performance', value: 'architecture' },
@@ -122,14 +107,14 @@ export function registerCommands(
 	
 	// Install category
 	context.subscriptions.push(
-		vscode.commands.registerCommand('copilot-ai-panel.installCategory', async () => {
+		vscode.commands.registerCommand('copilot-ai-flow.installCategory', async () => {
 			vscode.window.showInformationMessage('Install category (coming soon)');
 		})
 	);
 	
 	// List available language model tools (for debugging)
 	context.subscriptions.push(
-		vscode.commands.registerCommand('copilot-ai-panel.listTools', async () => {
+		vscode.commands.registerCommand('copilot-ai-flow.listTools', async () => {
 			const tools = vscode.lm.tools;
 			
 			if (!tools || tools.length === 0) {
