@@ -1,9 +1,9 @@
 {
   "name": "copilot-ai-flow",
-  "displayName": "Copilot AI Flow",
+  "displayName": "Feima Copilot AI Flow",
   "description": "Multi-perspective AI discussions with configurable expert roles",
   "version": "0.1.0",
-  "publisher": "ix",
+  "publisher": "feima",
   "icon": "assets/icon.png",
   "engines": {
     "vscode": "^1.85.0",
@@ -25,7 +25,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/ix/copilot-ai-flow"
+    "url": "https://github.com/feima/feima-copilot-ai-flow"
   },
   "activationEvents": [
     "onLanguageModel:*"
@@ -40,7 +40,7 @@
   "contributes": {
     "chatParticipants": [
       {
-        "id": "ix.copilot-ai-flow",
+        "id": "feima.copilot-ai-flow",
         "name": "flow",
         "description": "Multi-perspective AI discussions with expert roles",
         "isSticky": true,
@@ -69,40 +69,40 @@
     ],
     "commands": [
       {
-        "command": "copilot-ai-flow.browse",
+        "command": "feima.copilot-ai-flow.browse",
         "title": "Open Flow Gallery",
         "category": "AI Flow",
         "icon": "$(library)"
       },
       {
-        "command": "copilot-ai-flow.search",
+        "command": "feima.copilot-ai-flow.search",
         "title": "Search Prompts",
         "category": "AI Flow",
         "icon": "$(search)"
       },
       {
-        "command": "copilot-ai-flow.usePrompt",
+        "command": "feima.copilot-ai-flow.usePrompt",
         "title": "Use Prompt",
         "category": "AI Flow"
       },
       {
-        "command": "copilot-ai-flow.copyToWorkspace",
+        "command": "feima.copilot-ai-flow.copyToWorkspace",
         "title": "Copy Prompt to Workspace",
         "category": "AI Flow"
       },
       {
-        "command": "copilot-ai-flow.createFromTemplate",
+        "command": "feima.copilot-ai-flow.createFromTemplate",
         "title": "Create Prompt from Template",
         "category": "AI Flow",
         "icon": "$(add)"
       },
       {
-        "command": "copilot-ai-flow.installCategory",
+        "command": "feima.copilot-ai-flow.installCategory",
         "title": "Install Category to Workspace",
         "category": "AI Flow"
       },
       {
-        "command": "copilot-ai-flow.listTools",
+        "command": "feima.copilot-ai-flow.listTools",
         "title": "List Available Tools",
         "category": "AI Flow",
         "icon": "$(tools)"
@@ -116,7 +116,7 @@
     ],
     "customEditors": [
       {
-        "viewType": "copilot-ai-flow.flowEditor",
+        "viewType": "feima.copilot-ai-flow.flowEditor",
         "displayName": "Flow Editor",
         "selector": [
           { "filenamePattern": "*.flow.yaml" },

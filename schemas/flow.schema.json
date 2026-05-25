@@ -156,6 +156,36 @@
         }
       ]
     },
+    "promptRef": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Inline prompt text defining this role's perspective and responsibilities."
+        },
+        {
+          "type": "object",
+          "required": ["uri"],
+          "additionalProperties": false,
+          "properties": {
+            "uri": {
+              "type": "string",
+              "description": "Absolute URI or file path to a prompt file (e.g. `file:///path/to/prompt.prompt.md` or `/absolute/path/to/prompt.prompt.md`)."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["name"],
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Prompt filename to search in default Copilot prompt folders (`.github/prompts/`, `.vscode/prompts/`, etc.). The `.prompt.md` extension is optional."
+            }
+          }
+        }
+      ]
+    },
     "agentRef": {
       "oneOf": [
         {
@@ -185,8 +215,8 @@
           "description": "Display name of the role (e.g. `Senior Developer`, `Security Reviewer`)."
         },
         "prompt": {
-          "type": "string",
-          "description": "Instructions defining this role's perspective and responsibilities. Required unless `agent` is set."
+          "$ref": "#/definitions/promptRef",
+          "description": "Instructions defining this role's perspective and responsibilities. Can be an inline string, a URI reference, or a filename to search in default Copilot prompt folders. Required unless `agent` is set."
         },
         "agent": {
           "$ref": "#/definitions/agentRef",

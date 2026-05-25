@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) IX. All rights reserved.
+ *  Copyright (c) FeimaCode. All rights reserved.
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
@@ -7,12 +7,12 @@ import * as vscode from 'vscode';
 import * as yaml from 'js-yaml';
 import type {
 	IFlowDocument, IFlowRole, IFlowStage,
-	ISkillRef, IAgentRef, IContextRef,
+	ISkillRef, IAgentRef, IContextRef, IPromptRef,
 	OrchestrationStrategy, IsolationMode, CliMode, SubFlowPattern,
 } from '../types/flowDocument';
 
 // Re-export the types that other modules import from here.
-export type { ISkillRef, IAgentRef, IContextRef } from '../types/flowDocument';
+export type { ISkillRef, IAgentRef, IContextRef, IPromptRef } from '../types/flowDocument';
 export type { IFlowRole, IFlowStage, IFlowDocument, OrchestrationStrategy, IsolationMode, CliMode, SubFlowPattern };
 // Backward-compatible aliases used internally
 type IRoleDefinition = IFlowRole;
@@ -41,6 +41,8 @@ export interface IRoleResponse {
 	readonly content: string;
 	readonly model: string;
 	readonly error?: string;
+	/** URIs of files created or modified by tool calls during this role's execution. */
+	readonly touchedFiles?: readonly vscode.Uri[];
 }
 
 /**
@@ -138,7 +140,7 @@ export class FlowService {
 
 			const role = item as Record<string, unknown>;
 			const name = role.name ? String(role.name) : undefined;
-			const prompt = role.prompt ? String(role.prompt) : undefined;
+			const prompt = this.parsePromptRef(role.prompt);
 			const model = role.model ? String(role.model) : undefined;
 			const roleSkills = this.parseSkillRefs(role.skills);
 			const roleContexts = this.parseContextRefs(role.contexts);
@@ -160,6 +162,29 @@ export class FlowService {
 		}
 		
 		return roles;
+	}
+	
+	/**
+	 * Parse a prompt reference from YAML.
+	 * Accepts:
+	 * - Bare string → inline prompt text
+	 * - Object with `uri` key → absolute URI or file path
+	 * - Object with `name` key → filename searched in default Copilot prompt folders
+	 */
+	private parsePromptRef(value: unknown): IPromptRef | undefined {
+		if (typeof value === 'string') {
+			return value.trim() || undefined;
+		}
+		if (typeof value === 'object' && value !== null) {
+			const obj = value as Record<string, unknown>;
+			if (typeof obj.uri === 'string') {
+				return { uri: String(obj.uri) };
+			}
+			if (typeof obj.name === 'string') {
+				return { name: String(obj.name) };
+			}
+		}
+		return undefined;
 	}
 	
 	/**
@@ -404,7 +429,7 @@ export class FlowService {
 					if (!role.name.trim()) {
 						errors.push(`Stage "${stage.name}": role name cannot be empty`);
 					}
-					if (!role.prompt?.trim() && !role.agent) {
+					if (!role.prompt && !role.agent) {
 						errors.push(`Stage "${stage.name}", role "${role.name}": must have prompt or agent`);
 					}
 				}
@@ -426,7 +451,7 @@ export class FlowService {
 					errors.push(`Duplicate role name: ${role.name}`);
 				}
 				roleNames.add(role.name);
-				if (!role.prompt?.trim() && !role.agent) {
+				if (!role.prompt && !role.agent) {
 					errors.push(`Role "${role.name}" must have a prompt or agent`);
 				}
 			}
