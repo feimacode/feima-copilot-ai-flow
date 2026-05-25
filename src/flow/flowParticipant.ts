@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { FlowEngine } from './flowEngine';
 import { FlowLibrary } from './flowLibrary';
 import { FlowDiscoveryService } from './flowDiscoveryService';
+import { ILogger } from '../platform/log/common/logService';
 
 /**
  * Chat participant that orchestrates flow discussions.
@@ -17,10 +18,12 @@ export class FlowParticipant {
 	private readonly library: FlowLibrary;
 	private readonly discoveryService: FlowDiscoveryService;
 
-	constructor(private readonly context: vscode.ExtensionContext) {
-		this.engine = new FlowEngine();
+	constructor(private readonly context: vscode.ExtensionContext, log: ILogger) {
+		const engineLog = log.createSubLogger('FlowEngine');
+		const discoveryLog = log.createSubLogger('Discovery');
+		this.engine = new FlowEngine(engineLog);
 		this.library = new FlowLibrary(context);
-		this.discoveryService = new FlowDiscoveryService();
+		this.discoveryService = new FlowDiscoveryService(discoveryLog);
 	}
 	
 	/**

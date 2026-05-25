@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { ILogger } from '../platform/log/common/logService';
 
 /**
  * Custom tool invocation that bypasses toolInvocationToken to avoid "Invalid stream" errors.
@@ -15,20 +16,21 @@ import * as vscode from 'vscode';
 export async function customInvokeTool(
 	toolName: string,
 	input: Record<string, unknown>,
-	token: vscode.CancellationToken
+	token: vscode.CancellationToken,
+	log?: ILogger
 ): Promise<vscode.LanguageModelToolResult> {
 	// Find the tool
 	const tool = vscode.lm.tools.find(t => t.name === toolName);
 	
 	if (!tool) {
-		console.error(`[customInvokeTool] Tool not found: ${toolName}`);
+		log?.error(`Tool not found: ${toolName}`);
 		return {
 			content: [new vscode.LanguageModelTextPart(`Error: Tool '${toolName}' not found`)]
 		};
 	}
 	
 	try {
-		console.log(`[customInvokeTool] Invoking tool ${toolName} without toolInvocationToken`);
+		log?.debug(`Invoking tool ${toolName}`);
 		
 		// Call vscode.lm.invokeTool without toolInvocationToken
 		// This avoids "Invalid stream" errors but means no inline UI progress
@@ -45,11 +47,11 @@ export async function customInvokeTool(
 			token
 		);
 		
-		console.log(`[customInvokeTool] Tool ${toolName} completed successfully`);
+		log?.debug(`Tool ${toolName} completed`);
 		return result;
 		
 	} catch (error) {
-		console.error(`[customInvokeTool] Tool ${toolName} invocation failed:`, error);
+		log?.error(error instanceof Error ? error : String(error), `Tool ${toolName} invocation failed`);
 		
 		// Return error as a tool result
 		return {

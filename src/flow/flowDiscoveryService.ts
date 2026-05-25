@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { ILogger } from '../platform/log/common/logService';
 
 /**
  * Service for discovering flow files from various sources:
@@ -14,8 +15,13 @@ import * as path from 'path';
  * - Cached URI fallback
  */
 export class FlowDiscoveryService {
+	private readonly log: ILogger;
 	/** Cached from the last successful request so retries without the reference still work. */
 	private lastFlowUri: vscode.Uri | undefined;
+
+	constructor(log: ILogger) {
+		this.log = log;
+	}
 
 	/**
 	 * Extract a URI from a ChatPromptReference using duck-typing
@@ -142,7 +148,7 @@ export class FlowDiscoveryService {
 
 		// 4. Last-resort: cached URI from a previous successful request
 		if (this.lastFlowUri) {
-			console.log(`[FlowDiscoveryService] No flow reference found — reusing cached URI: ${this.lastFlowUri.fsPath}`);
+			this.log.debug(`No flow reference found — reusing cached URI: ${this.lastFlowUri.fsPath}`);
 		}
 		return this.lastFlowUri;
 	}

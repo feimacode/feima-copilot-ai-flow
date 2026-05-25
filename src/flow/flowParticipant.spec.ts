@@ -8,6 +8,7 @@ import { FlowParticipant } from './flowParticipant';
 import * as vscode from 'vscode';
 import type { IFlowConfig } from './flowService';
 import type { IFlowContext } from '../context/flowContextBuilder';
+import { NullLogService } from '../platform/log/common/logService';
 
 // Mock dependencies
 vi.mock('./flowService');
@@ -68,7 +69,7 @@ describe('FlowParticipant - CLI Integration', () => {
 			languageModelAccessInformation: {} as vscode.LanguageModelAccessInformation
 		};
 		
-		participant = new FlowParticipant(mockContext);
+		participant = new FlowParticipant(mockContext, new NullLogService());
 	});
 	
 	describe('CLI mode configuration', () => {

@@ -12,6 +12,7 @@ import { ToolCallRound } from '../prompts/flowTools';
 import { normalizeToolSchemas } from '../util/toolSchemaNormalizer';
 import { filterTools, shouldFilterTools } from '../util/toolFilter';
 import { CopilotSdkExecutor } from '../util/copilotSdkExecutor';
+import { ILogger } from '../platform/log/common/logService';
 
 /**
  * Flow execution engine - handles all execution strategies and prompt resolution.
@@ -23,13 +24,15 @@ export class FlowEngine {
 	private readonly flowService: FlowService;
 	private readonly contextBuilder: FlowContextBuilder;
 	private readonly conversationStore: FlowConversationStore;
+	private readonly log: ILogger;
 
 	/** Stable session ID reused while the same VS Code chat conversation is active. */
 	private currentSessionId: string | undefined;
 
-	constructor() {
-		this.promptRenderer = new FlowPromptRenderer();
-		this.sdkExecutor = new CopilotSdkExecutor();
+	constructor(log: ILogger) {
+		this.log = log;
+		this.promptRenderer = new FlowPromptRenderer(log.createSubLogger('Renderer'));
+		this.sdkExecutor = new CopilotSdkExecutor(log.createSubLogger('SdkExecutor'));
 		this.flowService = new FlowService();
 		this.contextBuilder = new FlowContextBuilder();
 		this.conversationStore = new FlowConversationStore();
@@ -431,12 +434,12 @@ export class FlowEngine {
 		
 		const allTools = vscode.lm.tools;
 		if (!allTools) {
-			console.warn('[FlowEngine] vscode.lm.tools is undefined');
+			this.log.warn('vscode.lm.tools is undefined');
 			return { tools: undefined, missingTools: config.tools ?? [] };
 		}
 		
 		if (config.tools.includes('*')) {
-			console.log(`[FlowEngine] Wildcard '*' detected - ${allTools.length} tools available`);
+			this.log.debug(`Wildcard '*' detected - ${allTools.length} tools available`);
 			return { tools: [...allTools], missingTools: [] };
 		}
 		
@@ -449,7 +452,7 @@ export class FlowEngine {
 		);
 		
 		if (unmatchedTools.length > 0) {
-			console.warn('[FlowEngine] Tools not found:', unmatchedTools);
+			this.log.warn(`Tools not found: ${unmatchedTools.join(', ')}`);
 		}
 		
 		return {
@@ -493,7 +496,7 @@ export class FlowEngine {
 			
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
-			console.error(`[FlowEngine] Error in callRoleSdk for ${role.name}:`, error);
+			this.log.error(error instanceof Error ? error : String(error), `Error in callRoleSdk for ${role.name}`);
 			return {
 				roleName: role.name,
 				content: '',
@@ -544,7 +547,7 @@ export class FlowEngine {
 			const maxPromptTokens = rawMaxInput > 16384
 				? rawMaxInput - 8192
 				: Math.floor(rawMaxInput * 0.75);
-			console.log(`[FlowEngine] Model: ${model.name}, maxInputTokens=${model.maxInputTokens}, using maxPromptTokens=${maxPromptTokens}`);
+			this.log.debug(`Model: ${model.name}, maxInputTokens=${model.maxInputTokens}, using maxPromptTokens=${maxPromptTokens}`);
 			
 			let responseText = '';
 			const maxToolRounds = 15;
@@ -560,7 +563,7 @@ export class FlowEngine {
 					break;
 				}
 				
-				console.log(`[FlowEngine] Starting tool round ${toolRound + 1} of ${maxToolRounds} for role ${role.name}`);
+				this.log.trace(`Starting tool round ${toolRound + 1} of ${maxToolRounds} for role ${role.name}`);
 
 				const renderResult = await this.promptRenderer.renderRolePrompt(
 					role.name,
@@ -576,34 +579,34 @@ export class FlowEngine {
 					toolInvocationToken
 				);
 				
-				console.log(`[FlowEngine] Prompt rendered: ${renderResult.messages.length} messages`);
+				this.log.debug(`Prompt rendered: ${renderResult.messages.length} messages`);
 				
 				toolCallResults = { ...toolCallResults, ...renderResult.toolCallResults };
 				
 				const messages = renderResult.messages;
 				
 				if (messages.length === 0) {
-					console.error(`[FlowEngine] renderPrompt returned 0 messages for ${role.name} — aborting`);
+					this.log.error(`renderPrompt returned 0 messages for ${role.name} — aborting`);
 					return { roleName: role.name, content: '', model: model.name, error: 'No prompt messages generated' };
 				}
 
 				const runtimeCaps = (model as unknown as { capabilities?: { toolCalling?: boolean | number } }).capabilities;
 				const modelSupportsTools = runtimeCaps ? runtimeCaps.toolCalling !== false : true;
 				if (!modelSupportsTools) {
-					console.warn(`[FlowEngine] Model ${model.name} reports toolCalling=false — skipping tools`);
+					this.log.warn(`Model ${model.name} reports toolCalling=false — skipping tools`);
 				}
 
 				const options: vscode.LanguageModelChatRequestOptions = {};
 				if (tools && tools.length > 0 && modelSupportsTools) {
 					let filteredTools = tools;
 					if (shouldFilterTools(tools.length)) {
-						console.log(`[FlowEngine] Applying smart tool filtering (${tools.length} -> max 128)`);
-						filteredTools = filterTools(tools, userQuery);
+						this.log.debug(`Applying smart tool filtering (${tools.length} -> max 128)`);
+						filteredTools = filterTools(tools, userQuery, undefined, this.log);
 					}
 					
 					const normalizedTools = normalizeToolSchemas(filteredTools);
 					options.tools = normalizedTools;
-					console.log(`[FlowEngine] Using ${normalizedTools.length} tools`);
+					this.log.debug(`Using ${normalizedTools.length} tools`);
 				}
 				
 				type ThinkingStream = { thinkingProgress: (d: { text?: string; id?: string; metadata?: Record<string, unknown> }) => void };
@@ -629,7 +632,7 @@ export class FlowEngine {
 							} else if (part instanceof vscode.LanguageModelToolCallPart) {
 								calls.push(part);
 								stream.progress(`🔧 ${part.name}(...)`);
-								console.log(`[FlowEngine] Received tool call: ${part.name} (callId: ${part.callId})`);
+								this.log.trace(`Received tool call: ${part.name} (callId: ${part.callId})`);
 							} else if (part instanceof vscode.LanguageModelDataPart) {
 								if (part.mimeType.startsWith('text/')) {
 									try {
@@ -662,14 +665,14 @@ export class FlowEngine {
 							thinkingStream?.thinkingProgress({ id: '', text: '', metadata: { vscodeReasoningDone: true, stopReason: 'other' } });
 						}
 					} catch (streamErr) {
-						console.error(`[FlowEngine] Stream error in round ${toolRound + 1}:`, streamErr);
+						this.log.error(streamErr instanceof Error ? streamErr : String(streamErr), `Stream error in round ${toolRound + 1}`);
 						stream.markdown(`\n> ❌ **Stream error (${role.name})**: ${String(streamErr)}\n\n`);
 					}
 					return { text, calls };
 				};
 				
 				const label = `Round ${toolRound + 1}: ${messages.length} msg(s) → ${model.name}`;
-				console.log(`[FlowEngine] ${label}`);
+				this.log.trace(label);
 				stream.progress(label);
 				
 				const chatRequest = await model.sendRequest(messages, options, token);
@@ -677,7 +680,7 @@ export class FlowEngine {
 				let roundText = initialText;
 				
 				if (roundText === '' && toolCalls.length === 0 && options.tools && options.tools.length > 0) {
-					console.warn(`[FlowEngine] Empty response with tools — retrying without tools`);
+					this.log.warn('Empty response with tools — retrying without tools');
 					stream.progress('Tools caused empty response — retrying without tools…');
 					const retryRequest = await model.sendRequest(messages, {}, token);
 					const retry = await streamParts(retryRequest);
@@ -687,10 +690,10 @@ export class FlowEngine {
 				
 				responseText += roundText;
 				
-				console.log(`[FlowEngine] Round ${toolRound + 1}: roundText length=${roundText.length}, toolCalls=${toolCalls.length}`);
+				this.log.trace(`Round ${toolRound + 1}: roundText length=${roundText.length}, toolCalls=${toolCalls.length}`);
 				
 				if (toolCalls.length === 0) {
-					console.log(`[FlowEngine] No tool calls in round ${toolRound + 1}, exiting loop`);
+					this.log.trace(`No tool calls in round ${toolRound + 1}, exiting loop`);
 					break;
 				}
 
@@ -723,7 +726,7 @@ export class FlowEngine {
 							}
 							toolCallResults[tc.callId] = { content: [new vscode.LanguageModelTextPart(`File created successfully: ${input.filePath}`)] };
 							touchedFileUris.push(fileUri);
-							console.log(`[FlowEngine] File created: ${input.filePath}`);
+							this.log.debug(`File created: ${input.filePath}`);
 						} catch (err) {
 							toolCallResults[tc.callId] = { content: [new vscode.LanguageModelTextPart(`File creation error: ${err instanceof Error ? err.message : String(err)}`)] };
 						}
@@ -736,13 +739,13 @@ export class FlowEngine {
 			}
 			
 			if (toolRound >= maxToolRounds) {
-				console.warn(`[FlowEngine] Role ${role.name} hit max tool rounds (${maxToolRounds})`);
+				this.log.warn(`Role ${role.name} hit max tool rounds (${maxToolRounds})`);
 				stream.markdown(`\n> ⚠️ **${role.name}**: reached max tool rounds (${maxToolRounds})\n\n`);
 			}
 			
 			const finalContent = responseText.trim();
 			if (!finalContent) {
-				console.warn(`[FlowEngine] Role ${role.name} returned empty content`);
+				this.log.warn(`Role ${role.name} returned empty content`);
 				stream.markdown(`\n> ⚠️ **${role.name}** returned an empty response. Model: ${model.name}\n\n`);
 			}
 
@@ -755,7 +758,7 @@ export class FlowEngine {
 			
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
-			console.error(`[FlowEngine] Error in callRole for ${role.name}:`, errorMessage);
+			this.log.error(error instanceof Error ? error : errorMessage, `Error in callRole for ${role.name}`);
 			return {
 				roleName: role.name,
 				content: '',
@@ -841,7 +844,7 @@ export class FlowEngine {
 				}
 				const bytes = await vscode.workspace.fs.readFile(promptUri);
 				const text = Buffer.from(bytes).toString('utf8');
-				console.log(`[FlowEngine] Resolved prompt from URI: ${promptUri.fsPath}`);
+				this.log.debug(`Resolved prompt from URI: ${promptUri.fsPath}`);
 				const parts = text.split(/^---\s*$/m);
 				return parts.length >= 3 ? parts.slice(2).join('---').trim() : text.trim();
 			}
@@ -876,7 +879,7 @@ export class FlowEngine {
 						await vscode.workspace.fs.stat(candidate);
 						const bytes = await vscode.workspace.fs.readFile(candidate);
 						const text = Buffer.from(bytes).toString('utf8');
-						console.log(`[FlowEngine] Resolved prompt from name: ${candidate.fsPath}`);
+						this.log.debug(`Resolved prompt from name: ${candidate.fsPath}`);
 						const parts = text.split(/^---\s*$/m);
 						return parts.length >= 3 ? parts.slice(2).join('---').trim() : text.trim();
 					} catch {
@@ -884,13 +887,13 @@ export class FlowEngine {
 					}
 				}
 
-				console.warn(`[FlowEngine] Prompt not found by name: ${name}`);
+				this.log.warn(`Prompt not found by name: ${name}`);
 				return undefined;
 			}
 
 			return undefined;
 		} catch (error) {
-			console.warn(`[FlowEngine] Failed to resolve prompt: ${error}`);
+			this.log.warn(`Failed to resolve prompt: ${error}`);
 			return undefined;
 		}
 	}
@@ -939,18 +942,18 @@ export class FlowEngine {
 			for (const candidate of candidates) {
 				try {
 					await vscode.workspace.fs.stat(candidate);
-					const bytes = await vscode.workspace.fs.readFile(candidate);
+						const bytes = await vscode.workspace.fs.readFile(candidate);
 					const text = Buffer.from(bytes).toString('utf8');
-					console.log(`[FlowEngine] Resolved context: ${candidate.fsPath}`);
+					this.log.debug(`Resolved context: ${candidate.fsPath}`);
 					return text.trim();
 				} catch {
 					// not found
 				}
 			}
-			console.warn(`[FlowEngine] Context file not found: ${p}`);
+			this.log.warn(`Context file not found: ${p}`);
 			return undefined;
 		} catch (error) {
-			console.warn(`[FlowEngine] Failed to resolve context: ${error}`);
+			this.log.warn(`Failed to resolve context: ${error}`);
 			return undefined;
 		}
 	}
@@ -1048,17 +1051,17 @@ export class FlowEngine {
 			}
 
 			if (!agentUri) {
-				console.warn(`[FlowEngine] Agent not found: ${typeof ref === 'string' ? ref : ref.path}`);
+				this.log.warn(`Agent not found: ${typeof ref === 'string' ? ref : ref.path}`);
 				return undefined;
 			}
 
-			console.log(`[FlowEngine] Resolved agent: ${agentUri.fsPath}`);
+			this.log.debug(`Resolved agent: ${agentUri.fsPath}`);
 			const bytes = await vscode.workspace.fs.readFile(agentUri);
 			const text = Buffer.from(bytes).toString('utf8');
 			const parts = text.split(/^---\s*$/m);
 			return parts.length >= 3 ? parts.slice(2).join('---').trim() : text.trim();
 		} catch (error) {
-			console.warn(`[FlowEngine] Failed to resolve agent: ${error}`);
+			this.log.warn(`Failed to resolve agent: ${error}`);
 			return undefined;
 		}
 	}
@@ -1103,7 +1106,7 @@ export class FlowEngine {
 			}
 
 			if (!skillUri) {
-				console.warn(`[FlowEngine] Skill not found: ${typeof ref === 'string' ? ref : ref.path}`);
+				this.log.warn(`Skill not found: ${typeof ref === 'string' ? ref : ref.path}`);
 				return undefined;
 			}
 
@@ -1112,7 +1115,7 @@ export class FlowEngine {
 			const parts = text.split(/^---\s*$/m);
 			return parts.length >= 3 ? parts.slice(2).join('---').trim() : text.trim();
 		} catch (error) {
-			console.warn(`[FlowEngine] Failed to resolve skill: ${error}`);
+			this.log.warn(`Failed to resolve skill: ${error}`);
 			return undefined;
 		}
 	}

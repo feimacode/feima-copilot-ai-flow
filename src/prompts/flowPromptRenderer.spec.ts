@@ -7,12 +7,13 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
 import { FlowPromptRenderer } from './flowPromptRenderer';
 import { IFlowContext } from '../context/flowContextBuilder';
+import { NullLogService } from '../platform/log/common/logService';
 
 describe('FlowPromptRenderer', () => {
 	let renderer: FlowPromptRenderer;
 	
 	beforeEach(() => {
-		renderer = new FlowPromptRenderer();
+		renderer = new FlowPromptRenderer(new NullLogService());
 	});
 	
 	describe('renderRolePrompt', () => {
