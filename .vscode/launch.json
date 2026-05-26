@@ -1,0 +1,92 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"type": "extensionHost",
+			"request": "launch",
+			"name": "Launch AI Flow Extension",
+			"runtimeExecutable": "${execPath}",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}"
+			],
+			"smartStep": true,
+			"sourceMaps": true,
+			"preLaunchTask": "npm: compile",
+			"outFiles": [
+				"${workspaceFolder}/out/**/*.js",
+				"!**/node_modules/**"
+			],
+			"presentation": {
+				"group": "0_launch"
+			}
+		},
+		{
+			"type": "extensionHost",
+			"request": "launch",
+			"name": "Launch AI Flow - Watch Mode",
+			"runtimeExecutable": "${execPath}",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}"
+			],
+			"smartStep": true,
+			"sourceMaps": true,
+			"preLaunchTask": "npm: compile",
+			"outFiles": [
+				"${workspaceFolder}/out/**/*.js",
+				"!**/node_modules/**"
+			],
+			"presentation": {
+				"group": "0_launch"
+			}
+		},
+		{
+			"type": "node",
+			"request": "launch",
+			"name": "Launch AI Flow - Code OSS",
+			"runtimeExecutable": "${workspaceFolder}/../vscode/scripts/code.sh",
+			"windows": {
+				"runtimeExecutable": "${workspaceFolder}/../vscode/scripts/code.bat"
+			},
+			"attachSimplePort": 5870,
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}"
+			],
+			"smartStep": true,
+			"sourceMaps": true,
+			"preLaunchTask": "npm: compile",
+			"outFiles": [
+				"${workspaceFolder}/out/**/*.js",
+				"!**/node_modules/**"
+			],
+			"presentation": {
+				"group": "0_launch"
+			}
+		},
+		{
+			"type": "node",
+			"request": "launch",
+			"name": "Launch AI Flow - Agents OSS",
+			"runtimeExecutable": "${workspaceFolder}/../vscode/scripts/code.sh",
+			"windows": {
+				"runtimeExecutable": "${workspaceFolder}/../vscode/scripts/code.bat"
+			},
+			"runtimeArgs": [
+				"--agents"
+			],
+			"attachSimplePort": 5870,
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}"
+			],
+			"smartStep": true,
+			"sourceMaps": true,
+			"preLaunchTask": "npm: compile",
+			"outFiles": [
+				"${workspaceFolder}/out/**/*.js",
+				"!**/node_modules/**"
+			],
+			"presentation": {
+				"group": "0_launch"
+			}
+		}
+	]
+}

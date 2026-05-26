@@ -1,11 +1,12 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) IX. All rights reserved.
+ *  Copyright (c) FeimaCode. All rights reserved.
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
 import { IFlowContext } from '../context/flowContextBuilder';
 import { FlowTurn } from '../session/flowConversation';
+import { ILogger } from '../platform/log/common/logService';
 
 // Dynamic import for ESM-only @github/copilot package
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -84,8 +85,13 @@ export interface CopilotSdkResult {
  * - 'cli-spawn': Spawn gh copilot CLI as subprocess
  */
 export class CopilotSdkExecutor {
+	private readonly log: ILogger;
 	private availableAgents: SweCustomAgent[] | undefined;
 	private sessionManager: LocalSessionManager | undefined;
+
+	constructor(log: ILogger) {
+		this.log = log;
+	}
 
 	/**
 	 * Get available custom agents
@@ -108,7 +114,7 @@ export class CopilotSdkExecutor {
 			this.availableAgents = await sdk.getCustomAgents(authInfo, workingDir);
 			return this.availableAgents as unknown[];
 		} catch (error) {
-			console.error('[CopilotSdkExecutor] Failed to get custom agents:', error);
+			this.log.error(error instanceof Error ? error : String(error), 'Failed to get custom agents');
 			return [];
 		}
 	}
@@ -143,7 +149,7 @@ export class CopilotSdkExecutor {
 				const login = loginOutput.trim();
 				
 				if (token && login) {
-					console.log('[CopilotSdkExecutor] Using gh-cli authentication');
+					this.log.debug('Using gh-cli authentication');
 					return {
 						type: 'gh-cli',
 						host: 'https://github.com',
@@ -152,7 +158,7 @@ export class CopilotSdkExecutor {
 					};
 				}
 			} catch (ghError) {
-				console.log('[CopilotSdkExecutor] gh CLI not available or not authenticated, trying VS Code auth...');
+				this.log.debug('gh CLI not available or not authenticated, trying VS Code auth...');
 			}
 
 			// Second try: Get GitHub token from VS Code authentication
@@ -162,7 +168,7 @@ export class CopilotSdkExecutor {
 			});
 
 			if (session) {
-				console.log('[CopilotSdkExecutor] Using VS Code GitHub authentication');
+				this.log.debug('Using VS Code GitHub authentication');
 				return {
 					type: 'token',
 					host: 'https://github.com',
@@ -173,7 +179,7 @@ export class CopilotSdkExecutor {
 			// Third try: Environment variable
 			const envToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
 			if (envToken) {
-				console.log('[CopilotSdkExecutor] Using environment variable authentication');
+				this.log.debug('Using environment variable authentication');
 				return {
 					type: 'token',
 					host: 'https://github.com',
@@ -183,7 +189,7 @@ export class CopilotSdkExecutor {
 
 			return undefined;
 		} catch (error) {
-			console.error('[CopilotSdkExecutor] Failed to get auth info:', error);
+			this.log.error(error instanceof Error ? error : String(error), 'Failed to get auth info');
 			return undefined;
 		}
 	}
@@ -336,17 +342,11 @@ export class CopilotSdkExecutor {
 			};
 
 			// Debug logging
-			console.log('[CopilotSdkExecutor] Query options:', {
-				workingDirectory,
-				model: queryOptions.model,
-				authType: authInfo?.type,
-				hasPrompt: !!prompt,
-				customAgent: options.customAgent
-			});
+			this.log.debug(`Query options: workingDirectory=${workingDirectory}, model=${queryOptions.model}, authType=${authInfo?.type}, customAgent=${options.customAgent}`);
 
 			// Execute the query
 			const sdk = await getSdk();
-			console.log('[CopilotSdkExecutor] ✅ Executing query via GitHub Copilot SDK (not API mode)');
+			this.log.debug('Executing query via GitHub Copilot SDK');
 			const events = sdk.query(queryOptions);
 
 			let content = '';
@@ -381,7 +381,7 @@ export class CopilotSdkExecutor {
 				};
 			}
 
-			console.log(`[CopilotSdkExecutor] ✅ SDK query completed successfully for ${options.roleName}`);
+			this.log.debug(`SDK query completed for ${options.roleName}`);
 
 			return {
 				roleName: options.roleName,
@@ -400,7 +400,7 @@ export class CopilotSdkExecutor {
 				errorMessage = error.message;
 			}
 
-			console.error(`[CopilotSdkExecutor] Error executing SDK query for ${options.roleName}:`, error);
+			this.log.error(error instanceof Error ? error : String(error), `Error executing SDK query for ${options.roleName}`);
 
 			return {
 				roleName: options.roleName,
@@ -422,7 +422,7 @@ export class CopilotSdkExecutor {
 			const availability = await this.checkAvailability();
 			if (!availability.available) {
 				// Fallback to CLI spawn if SDK not available
-				console.warn('[CopilotSdkExecutor] SDK not available, falling back to CLI spawn');
+				this.log.warn('SDK not available, falling back to CLI spawn');
 				return this.executeViaCliSpawn(options);
 			}
 			
@@ -471,7 +471,7 @@ export class CopilotSdkExecutor {
 				options.onProgress?.(`${options.roleName}: Session ${sessionId} created`);
 			}
 			
-			console.log(`[CopilotSdkExecutor] ✅ Using SDK session ${sessionId}`);
+			this.log.debug(`Using SDK session ${sessionId}`);
 			
 			// Send prompt to session
 			options.onProgress?.(`${options.roleName}: Sending prompt...`);
@@ -502,7 +502,7 @@ export class CopilotSdkExecutor {
 				};
 			}
 			
-			console.log(`[CopilotSdkExecutor] ✅ SDK session ${sessionId} completed for ${options.roleName}`);
+			this.log.debug(`SDK session ${sessionId} completed for ${options.roleName}`);
 			
 			return {
 				roleName: options.roleName,
@@ -521,11 +521,11 @@ export class CopilotSdkExecutor {
 				errorMessage = error.message;
 			}
 			
-			console.error(`[CopilotSdkExecutor] Error executing SDK session for ${options.roleName}:`, error);
+			this.log.error(error instanceof Error ? error : String(error), `Error executing SDK session for ${options.roleName}`);
 			
 			// Try fallback to CLI spawn
 			if (!options.sessionId) { // Don't fallback if resuming specific session
-				console.warn('[CopilotSdkExecutor] Falling back to CLI spawn');
+				this.log.warn('Falling back to CLI spawn');
 				return this.executeViaCliSpawn(options);
 			}
 			
@@ -567,7 +567,7 @@ export class CopilotSdkExecutor {
 			// Add non-interactive flag for programmatic usage
 			args.push('--non-interactive');
 			
-			console.log(`[CopilotSdkExecutor] Spawning CLI: gh ${args.join(' ')}`);
+			this.log.debug(`Spawning CLI: gh ${args.join(' ')}`);
 			
 			const child = spawn('gh', args, {
 				stdio: ['pipe', 'pipe', 'pipe'],
@@ -639,7 +639,7 @@ export class CopilotSdkExecutor {
 				};
 			}
 			
-			console.log(`[CopilotSdkExecutor] ✅ CLI spawn completed for ${options.roleName}`);
+			this.log.debug(`CLI spawn completed for ${options.roleName}`);
 			
 			return {
 				roleName: options.roleName,
@@ -655,7 +655,7 @@ export class CopilotSdkExecutor {
 				errorMessage = error.message;
 			}
 			
-			console.error(`[CopilotSdkExecutor] Error executing CLI for ${options.roleName}:`, error);
+			this.log.error(error instanceof Error ? error : String(error), `Error executing CLI for ${options.roleName}`);
 			
 			return {
 				roleName: options.roleName,
@@ -701,7 +701,7 @@ export class CopilotSdkExecutor {
 
 			case 'session.error':
 				// Log the full error for debugging
-				console.error('[CopilotSdkExecutor] Session error event:', JSON.stringify(evt, null, 2));
+					this.log.error(`Session error event: ${JSON.stringify(evt, null, 2)}`);
 				throw new Error(`Execution failed: ${evt.data?.message || 'Session error occurred'}`);
 
 			case 'tool_call.requested':

@@ -1,11 +1,12 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) IX. All rights reserved.
+ *  Copyright (c) FeimaCode. All rights reserved.
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { ILogger, NullLogService } from '../platform/log/common/logService';
 
 /**
  * Service for setting up required shims for GitHub Copilot SDK
@@ -18,12 +19,16 @@ import * as path from 'path';
  * to ensure the SDK can load them at runtime.
  */
 export class CopilotSdkShims {
+	private readonly log: ILogger;
 	private shimsInitialized = false;
 	private shimsDirectory: vscode.Uri | undefined;
 	
 	constructor(
-		private readonly context: vscode.ExtensionContext
-	) {}
+		private readonly context: vscode.ExtensionContext,
+		log?: ILogger
+	) {
+		this.log = log ?? new NullLogService();
+	}
 	
 	/**
 	 * Ensure all required shims are set up
@@ -50,10 +55,10 @@ export class CopilotSdkShims {
 			await this.setupRipgrepShim();
 			
 			this.shimsInitialized = true;
-			console.log('[CopilotSdkShims] All shims initialized successfully');
+			this.log.debug('All shims initialized successfully');
 			
 		} catch (error) {
-			console.error('[CopilotSdkShims] Failed to initialize shims:', error);
+			this.log.error(error instanceof Error ? error : String(error), 'Failed to initialize shims');
 			throw new Error(`Failed to initialize SDK shims: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
@@ -83,7 +88,7 @@ export class CopilotSdkShims {
 		
 		// Check if source exists
 		if (!fs.existsSync(nodePtySource)) {
-			console.warn(`[CopilotSdkShims] node-pty not found at ${nodePtySource}`);
+			this.log.warn(`node-pty not found at ${nodePtySource}`);
 			// Try alternative location
 			const altSource = path.join(vscodeAppRoot, 'node_modules', 'node-pty', 'build', 'Release', 'pty.node');
 			if (fs.existsSync(altSource)) {
@@ -101,7 +106,7 @@ export class CopilotSdkShims {
 		const sourceData = await fs.promises.readFile(nodePtySource);
 		await vscode.workspace.fs.writeFile(nodePtyDestFile, sourceData);
 		
-		console.log('[CopilotSdkShims] node-pty shim created successfully');
+		this.log.debug('node-pty shim created successfully');
 	}
 	
 	/**
@@ -160,7 +165,7 @@ export class CopilotSdkShims {
 			}
 		}
 		
-		console.log('[CopilotSdkShims] ripgrep shim created successfully');
+		this.log.debug('ripgrep shim created successfully');
 	}
 	
 	/**

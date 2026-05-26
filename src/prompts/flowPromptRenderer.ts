@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) IX. All rights reserved.
+ *  Copyright (c) FeimaCode. All rights reserved.
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { renderPrompt } from '@vscode/prompt-tsx';
 import { ContextFile, FlowRolePrompt } from './flowRolePrompt';
 import { IFlowContext } from '../context/flowContextBuilder';
+import { ILogger } from '../platform/log/common/logService';
 
 export type { ContextFile };
 import { FlowTurn } from '../session/flowConversation';
@@ -16,7 +17,12 @@ import { ToolCallRound, ToolResultMetadata } from './flowTools';
  * Service for rendering Prompt-TSX components to VS Code language model messages
  */
 export class FlowPromptRenderer {
-	
+
+	private readonly log: ILogger;
+
+	constructor(log: ILogger) {
+		this.log = log;
+	}
 	/**
 	 * Render a role prompt using Prompt-TSX and convert to VS Code messages
 	 * 
@@ -43,12 +49,7 @@ export class FlowPromptRenderer {
 		toolInvocationToken: vscode.ChatParticipantToolToken | undefined = undefined
 	): Promise<{ messages: vscode.LanguageModelChatMessage[]; toolCallResults: Record<string, vscode.LanguageModelToolResult> }> {
 		
-		console.log(`[FlowPromptRenderer] renderRolePrompt called with:`, {
-			roleName,
-			toolCallRoundsLength: toolCallRounds.length,
-			toolCallResultsKeys: Object.keys(toolCallResults),
-			hasToolInvocationToken: !!toolInvocationToken
-		});
+		this.log.debug(`renderRolePrompt called for ${roleName} (toolRounds=${toolCallRounds.length})`);
 
 		// Get a language model for tokenization
 		const models = await vscode.lm.selectChatModels({ vendor: 'copilot' });
@@ -58,7 +59,7 @@ export class FlowPromptRenderer {
 			throw new Error('No language model available for prompt rendering');
 		}
 		
-		console.log(`[FlowPromptRenderer] Calling renderPrompt...`);
+		this.log.debug('Calling renderPrompt...');
 
 		let result;
 		try {
@@ -128,33 +129,27 @@ export class FlowPromptRenderer {
 				{ modelMaxPromptTokens: maxTokens },
 				customTokenizer as unknown as vscode.LanguageModelChat // Cast to expected type
 			);
-			console.log(`[FlowPromptRenderer] renderPrompt completed successfully with ${result.messages.length} messages`);
+			this.log.debug(`renderPrompt completed: ${result.messages.length} messages`);
 		} catch (error) {
-			console.error(`[FlowPromptRenderer] renderPrompt failed:`, error);
+			this.log.error(error instanceof Error ? error : String(error), 'renderPrompt failed');
 			throw error;
 		}
 
 		// Extract tool results from metadata
 		const newToolCallResults = { ...toolCallResults };
 		const toolResultMetadata = result.metadata.getAll(ToolResultMetadata);
-		console.log(`[FlowPromptRenderer] Extracted ${toolResultMetadata?.length || 0} tool result metadata entries`);
+		this.log.trace(`Extracted ${toolResultMetadata?.length || 0} tool result metadata entries`);
 		if (toolResultMetadata?.length) {
 			toolResultMetadata.forEach((meta: ToolResultMetadata) => {
-				console.log(`[FlowPromptRenderer] Metadata for ${meta.toolCallId}:`, {
-					hasResult: !!meta.result,
-					hasContent: meta.result?.content !== undefined,
-					isArray: Array.isArray(meta.result?.content),
-					contentLength: meta.result?.content?.length
-				});
 				// Only store valid tool results with content
 				if (meta.result && meta.result.content && Array.isArray(meta.result.content)) {
 					newToolCallResults[meta.toolCallId] = meta.result;
 				} else {
-					console.warn(`[FlowPromptRenderer] Skipping invalid tool result for ${meta.toolCallId}`);
+					this.log.warn(`Skipping invalid tool result for ${meta.toolCallId}`);
 				}
 			});
 		}
-		console.log(`[FlowPromptRenderer] Returning ${Object.keys(newToolCallResults).length} tool results`);
+		this.log.trace(`Returning ${Object.keys(newToolCallResults).length} tool results`);
 
 		return {
 			messages: result.messages,

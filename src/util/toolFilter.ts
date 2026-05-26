@@ -1,9 +1,10 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) IX. All rights reserved.
+ *  Copyright (c) FeimaCode. All rights reserved.
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { ILogger } from '../platform/log/common/logService';
 
 /**
  * Hard limit on number of tools that can be sent to the LLM
@@ -127,13 +128,14 @@ function scoreToolRelevance(tool: vscode.LanguageModelChatTool, query: string): 
 export function filterTools(
 	allTools: vscode.LanguageModelChatTool[],
 	query: string,
-	maxTools: number = HARD_TOOL_LIMIT
+	maxTools: number = HARD_TOOL_LIMIT,
+	log?: ILogger
 ): vscode.LanguageModelChatTool[] {
 	if (allTools.length <= maxTools) {
 		return allTools;
 	}
 	
-	console.log(`[ToolFilter] Filtering ${allTools.length} tools down to ${maxTools}`);
+	log?.debug(`Filtering ${allTools.length} tools down to ${maxTools}`);
 	
 	// Separate core tools and others
 	const coreTools: vscode.LanguageModelChatTool[] = [];
@@ -147,7 +149,7 @@ export function filterTools(
 		}
 	}
 	
-	console.log(`[ToolFilter] Core tools: ${coreTools.length}, Other tools: ${otherTools.length}`);
+	log?.debug(`Core tools: ${coreTools.length}, Other tools: ${otherTools.length}`);
 	
 	// Always include all core tools if they fit
 	const result: vscode.LanguageModelChatTool[] = [];
@@ -169,18 +171,18 @@ export function filterTools(
 			result.push(scoredTools[i].tool);
 		}
 		
-		console.log(`[ToolFilter] Selected ${result.length} tools: ${coreTools.length} core + ${result.length - coreTools.length} others`);
+		log?.debug(`Selected ${result.length} tools: ${coreTools.length} core + ${result.length - coreTools.length} others`);
 	} else {
 		// If even core tools exceed the limit (shouldn't happen), just take the first maxTools
 		result.push(...coreTools.slice(0, maxTools));
-		console.warn(`[ToolFilter] Core tools alone (${coreTools.length}) exceed limit (${maxTools})`);
+		log?.warn(`Core tools alone (${coreTools.length}) exceed limit (${maxTools})`);
 	}
 	
 	// Log which important tools made it
 	const importantToolsIncluded = result
 		.filter(t => CORE_TOOLS.has(t.name))
 		.map(t => t.name);
-	console.log(`[ToolFilter] Important tools included:`, importantToolsIncluded);
+	log?.debug(`Important tools included: ${importantToolsIncluded.join(', ')}`);
 	
 	return result;
 }

@@ -1,0 +1,52 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "npm",
+			"script": "compile",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"label": "npm: compile",
+			"detail": "tsc -p ./ && node esbuild.webview.mjs (extension + webview)",
+			"problemMatcher": "$tsc"
+		},
+		{
+			"label": "watch (extension + webview)",
+			"dependsOn": [
+				"npm: watch",
+				"npm: watch:webview"
+			],
+			"dependsOrder": "parallel",
+			"group": "build",
+			"isBackground": true,
+			"problemMatcher": "$tsc-watch"
+		},
+		{
+			"type": "npm",
+			"script": "watch",
+			"label": "npm: watch",
+			"detail": "tsc -watch -p ./ (extension only)",
+			"isBackground": true,
+			"problemMatcher": "$tsc-watch"
+		},
+		{
+			"type": "npm",
+			"script": "watch:webview",
+			"label": "npm: watch:webview",
+			"detail": "node esbuild.webview.mjs --watch (webview only)",
+			"isBackground": true
+		},
+		{
+			"type": "npm",
+			"script": "test",
+			"group": {
+				"kind": "test",
+				"isDefault": true
+			},
+			"label": "npm: test",
+			"detail": "vitest run"
+		}
+	]
+}

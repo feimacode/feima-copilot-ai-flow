@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) IX. All rights reserved.
+ *  Copyright (c) FeimaCode. All rights reserved.
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
@@ -18,7 +18,7 @@ import * as crypto from 'crypto';
  */
 export class FlowEditorProvider implements vscode.CustomTextEditorProvider {
 
-	public static readonly viewType = 'copilot-ai-flow.flowEditor';
+	public static readonly viewType = 'feima.copilot-ai-flow.flowEditor';
 
 	static register(context: vscode.ExtensionContext): vscode.Disposable {
 		return vscode.window.registerCustomEditorProvider(

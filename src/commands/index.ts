@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) IX. All rights reserved.
+ *  Copyright (c) FeimaCode. All rights reserved.
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
@@ -10,21 +10,21 @@ export function registerCommands(context: vscode.ExtensionContext) {
 	
 	// Browse gallery
 	context.subscriptions.push(
-		vscode.commands.registerCommand('copilot-ai-flow.browse', () => {
+		vscode.commands.registerCommand('feima.copilot-ai-flow.browse', () => {
 			GalleryViewProvider.open(context);
 		})
 	);
 	
 	// Search flows — open the gallery panel (search box is inline in the webview)
 	context.subscriptions.push(
-		vscode.commands.registerCommand('copilot-ai-flow.search', () => {
+		vscode.commands.registerCommand('feima.copilot-ai-flow.search', () => {
 			GalleryViewProvider.open(context);
 		})
 	);
 	
 	// Use prompt — accepts a file URI or path string
 	context.subscriptions.push(
-		vscode.commands.registerCommand('copilot-ai-flow.usePrompt', async (filePathOrUri: string | vscode.Uri) => {
+		vscode.commands.registerCommand('feima.copilot-ai-flow.usePrompt', async (filePathOrUri: string | vscode.Uri) => {
 			const uri = typeof filePathOrUri === 'string'
 				? vscode.Uri.file(filePathOrUri)
 				: filePathOrUri;
@@ -36,7 +36,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
 	
 	// Copy prompt to workspace — accepts a file URI or path string
 	context.subscriptions.push(
-		vscode.commands.registerCommand('copilot-ai-flow.copyToWorkspace', async (filePathOrUri: string | vscode.Uri) => {
+		vscode.commands.registerCommand('feima.copilot-ai-flow.copyToWorkspace', async (filePathOrUri: string | vscode.Uri) => {
 			const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 			if (!workspaceFolder) {
 				vscode.window.showErrorMessage('Please open a workspace first');
@@ -87,7 +87,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
 	
 	// Create from template
 	context.subscriptions.push(
-		vscode.commands.registerCommand('copilot-ai-flow.createFromTemplate', async () => {
+		vscode.commands.registerCommand('feima.copilot-ai-flow.createFromTemplate', async () => {
 			const template = await vscode.window.showQuickPick([
 				{ label: 'Sprint Planning', description: '4 roles: Dev, QA, PO, Tech Lead', value: 'sprint' },
 				{ label: 'Architecture Review', description: '3 roles: Solutions, Security, Performance', value: 'architecture' },
@@ -107,14 +107,14 @@ export function registerCommands(context: vscode.ExtensionContext) {
 	
 	// Install category
 	context.subscriptions.push(
-		vscode.commands.registerCommand('copilot-ai-flow.installCategory', async () => {
+		vscode.commands.registerCommand('feima.copilot-ai-flow.installCategory', async () => {
 			vscode.window.showInformationMessage('Install category (coming soon)');
 		})
 	);
 	
 	// List available language model tools (for debugging)
 	context.subscriptions.push(
-		vscode.commands.registerCommand('copilot-ai-flow.listTools', async () => {
+		vscode.commands.registerCommand('feima.copilot-ai-flow.listTools', async () => {
 			const tools = vscode.lm.tools;
 			
 			if (!tools || tools.length === 0) {

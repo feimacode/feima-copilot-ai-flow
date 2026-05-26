@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) IX. All rights reserved.
+ *  Copyright (c) FeimaCode. All rights reserved.
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
@@ -37,6 +37,13 @@ export type IAgentRef = string | { readonly path: string };
  */
 export type IContextRef = string | { readonly path: string };
 
+/**
+ * Prompt reference — can be:
+ * - Inline string (embedded prompt text)
+ * - URI object: `{ uri: string }` — absolute URI or file path to a prompt file
+ * - Name object: `{ name: string }` — filename searched in default Copilot prompt folders
+ */
+export type IPromptRef = string | { readonly uri: string } | { readonly name: string };
 // ---------------------------------------------------------------------------
 // Document structure
 // ---------------------------------------------------------------------------
@@ -47,10 +54,11 @@ export interface IFlowRole {
 	readonly name: string;
 	/**
 	 * System prompt defining the role's perspective and responsibilities.
+	 * Can be an inline string, a URI reference, or a filename to search in default prompt folders.
 	 * Optional when `agent` is set — the agent file body is used instead.
-	 * When both are provided, `prompt` is prepended as additional context.
+	 * When both are provided, `prompt` content is prepended as additional context.
 	 */
-	readonly prompt?: string;
+	readonly prompt?: IPromptRef;
 	/** Reference to an agent file whose body becomes (or augments) the prompt. */
 	readonly agent?: IAgentRef;
 	/** Static arguments substituted into `$ARGUMENTS` in the agent/skill body. */

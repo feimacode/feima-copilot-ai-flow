@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) IX. All rights reserved.
+ *  Copyright (c) FeimaCode. All rights reserved.
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
@@ -8,12 +8,23 @@ import { FlowParticipant } from './flow/flowParticipant';
 import { FlowEditorProvider } from './ui/flowEditorProvider';
 import { registerCommands } from './commands';
 import { SkillCompletionProvider } from './completion/skillCompletionProvider';
+import { LogServiceImpl } from './platform/log/common/logService';
+import { VSCodeLogTarget, ConsoleLogTarget } from './platform/log/vscode/logService';
+import { LogLevel } from './platform/log/common/logService';
 
 export function activate(context: vscode.ExtensionContext) {
-	console.log('Copilot AI Flow extension is activating...');
+	const logChannel = vscode.window.createOutputChannel('Copilot AI Flow', { log: true });
+	context.subscriptions.push(logChannel);
+
+	const logService = new LogServiceImpl([
+		new VSCodeLogTarget(logChannel),
+		new ConsoleLogTarget('[Flow] ', LogLevel.Error)
+	]);
+
+	logService.info('Copilot AI Flow extension is activating...');
 
 	// Register the @flow participant
-	const participant = new FlowParticipant(context);
+	const participant = new FlowParticipant(context, logService);
 	context.subscriptions.push(participant.register());
 
 	// Register the React Flow canvas editor for *.flow.yaml / *.flow.yml files.
@@ -33,9 +44,9 @@ export function activate(context: vscode.ExtensionContext) {
 	// Register all commands
 	registerCommands(context);
 
-	console.log('Copilot AI Flow extension activated successfully');
+	logService.info('Copilot AI Flow extension activated successfully');
 }
 
 export function deactivate() {
-	console.log('Copilot AI Flow extension deactivated');
+	// deactivation logging is best-effort; output channel may already be disposed
 }
