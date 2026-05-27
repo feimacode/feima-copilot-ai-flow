@@ -5,7 +5,7 @@
 
 import * as yaml from 'js-yaml';
 import type { Node, Edge } from '@xyflow/react';
-import type { IFlowDocument, IFlowRole, IFlowStage, SubFlowPattern } from '../../src/types/flowDocument';
+import type { IFlowDocument, IFlowRole, IFlowStage } from '../../src/types/flowDocument';
 
 // ---------------------------------------------------------------------------
 // Data shapes
@@ -14,7 +14,6 @@ import type { IFlowDocument, IFlowRole, IFlowStage, SubFlowPattern } from '../..
 export interface MetaNodeData extends Record<string, unknown> {
 	name: string;
 	description: string;
-	orchestration: 'sequence' | 'cli';
 	category: string;
 	difficulty: string;
 	tags: string[];
@@ -22,9 +21,6 @@ export interface MetaNodeData extends Record<string, unknown> {
 	author: string;
 	model: string;
 	tools: string[];
-	// cli-specific
-	isolation: string;
-	cliMode: string;
 	customAgent: string;
 	onChange: (patch: Partial<Omit<MetaNodeData, 'onChange' | 'onEdit'>>) => void;
 	onEdit: () => void;
@@ -42,14 +38,12 @@ export interface RoleNodeData extends Record<string, unknown> {
 
 export interface StageNodeData extends Record<string, unknown> {
 	stageName: string;
-	subFlow: string;
 	iterations: number;
 }
 
 /** Preserved stage structure so serializeFlowDoc can reconstruct the YAML correctly. */
 export interface StageMeta {
 	name: string;
-	subFlow: string;
 	iterations: number;
 	skills?: unknown[];
 	roleCount: number;
@@ -109,7 +103,6 @@ export function parseFlowDoc(content: string): ParseResult {
 	const metaData: MetaNodeData = {
 		name: String(fm.name ?? ''),
 		description: String(fm.description ?? ''),
-		orchestration: fm.orchestration === 'cli' ? 'cli' : 'sequence',
 		category: String(fm.category ?? ''),
 		difficulty: String(fm.difficulty ?? ''),
 		tags: Array.isArray(fm.tags) ? (fm.tags as string[]) : [],
@@ -117,8 +110,6 @@ export function parseFlowDoc(content: string): ParseResult {
 		author: String(fm.author ?? ''),
 		model: String(fm.model ?? ''),
 		tools: Array.isArray(fm.tools) ? (fm.tools as string[]) : [],
-		isolation: String(fm.isolation ?? ''),
-		cliMode: String(fm.cliMode ?? ''),
 		customAgent: String(fm.customAgent ?? ''),
 		onChange: () => { /* replaced by App */ },
 		onEdit: () => { /* replaced by App */ },
@@ -184,7 +175,6 @@ function buildStageGraph(
 
 		stageMeta.push({
 			name: String(stage.name ?? `Stage ${si + 1}`),
-			subFlow: (stage.subFlow ?? 'sequence') as SubFlowPattern,
 			iterations: typeof stage.iterations === 'number' ? Math.max(1, stage.iterations) : 1,
 			skills: Array.isArray(stage.skills) ? stage.skills : undefined,
 			roleCount,
@@ -198,7 +188,6 @@ function buildStageGraph(
 			style: { width: STAGE_WIDTH, height: stageH },
 			data: {
 				stageName: stageMeta[si].name,
-				subFlow: stageMeta[si].subFlow,
 				iterations: stageMeta[si].iterations,
 			} as StageNodeData,
 		});
@@ -265,15 +254,12 @@ export function serializeFlowDoc(nodes: Node[], rawBody: string, stageMeta?: Sta
 	const fm: Record<string, unknown> = { name: meta.name };
 	if (meta.description) { fm.description = meta.description; }
 	if (meta.category) { fm.category = meta.category; }
-	fm.orchestration = meta.orchestration;
 	if (meta.difficulty) { fm.difficulty = meta.difficulty; }
 	if (meta.tags?.length) { fm.tags = meta.tags; }
 	if (meta.version) { fm.version = meta.version; }
 	if (meta.author) { fm.author = meta.author; }
 	if (meta.model) { fm.model = meta.model; }
 	if (meta.tools?.length) { fm.tools = meta.tools; }
-	if (meta.isolation) { fm.isolation = meta.isolation; }
-	if (meta.cliMode) { fm.cliMode = meta.cliMode; }
 	if (meta.customAgent) { fm.customAgent = meta.customAgent; }
 
 	if (stageMeta) {
@@ -284,7 +270,6 @@ export function serializeFlowDoc(nodes: Node[], rawBody: string, stageMeta?: Sta
 			offset += stage.roleCount;
 			const s: Record<string, unknown> = {
 				name: stage.name,
-				subFlow: stage.subFlow,
 				iterations: stage.iterations,
 			};
 			if (stage.skills?.length) { s.skills = stage.skills; }

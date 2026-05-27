@@ -7,17 +7,18 @@ import * as vscode from 'vscode';
 import { ILogger } from '../platform/log/common/logService';
 
 /**
- * Custom tool invocation that bypasses toolInvocationToken to avoid "Invalid stream" errors.
- * 
- * This is a workaround for https://github.com/microsoft/vscode/issues/255855
- * VS Code's built-in invokeTool has strict requirements about stream context that don't work
- * in nested tool-calling loops. This function calls vscode.lm.invokeTool without the token.
+ * Invoke an LM tool from outside a Prompt-TSX rendering cycle.
+ *
+ * Always passes the supplied `toolInvocationToken` to enable approval dialogs,
+ * inline UI, and other session-aware features. Blocked tools are filtered out
+ * before reaching this point (see flowEngine.ts).
  */
 export async function customInvokeTool(
 	toolName: string,
 	input: Record<string, unknown>,
 	token: vscode.CancellationToken,
-	log?: ILogger
+	log?: ILogger,
+	toolInvocationToken?: vscode.ChatParticipantToolToken
 ): Promise<vscode.LanguageModelToolResult> {
 	// Find the tool
 	const tool = vscode.lm.tools.find(t => t.name === toolName);
@@ -29,16 +30,16 @@ export async function customInvokeTool(
 		};
 	}
 	
+	const invocationToken = toolInvocationToken;
+
 	try {
-		log?.debug(`Invoking tool ${toolName}`);
+		log?.debug(`Invoking tool ${toolName}${invocationToken ? ' (with session token)' : ''}`);
 		
-		// Call vscode.lm.invokeTool without toolInvocationToken
-		// This avoids "Invalid stream" errors but means no inline UI progress
 		const result = await vscode.lm.invokeTool(
 			toolName,
 			{
 				input,
-				toolInvocationToken: undefined, // Critical: avoid stream validation errors
+				toolInvocationToken: invocationToken,
 				tokenizationOptions: {
 					tokenBudget: 4000,
 					countTokens: async (content: string) => Math.ceil(content.length / 4)

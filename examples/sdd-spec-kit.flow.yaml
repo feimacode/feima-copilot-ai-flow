@@ -2,7 +2,6 @@ name: "SDD Spec-Kit Driven Development"
 description: "Agentic SDD pipeline: staged execution with LLM auto-review, from raw idea to implementation roadmap. One human gate — initial clarification."
 category: "software-development"
 subcategory: "specification"
-orchestration: sequence
 difficulty: advanced
 tags: ["sdd", "spec-kit", "requirements", "architecture", "long-running", "autonomous", "staged"]
 version: "2.0.0"
@@ -22,7 +21,6 @@ stages:
   # Single-shot — produces questions + assumptions for human to answer.
   # No critic: the human response IS the gate.
   - name: "Clarification"
-    subFlow: sequence
     iterations: 1
     roles:
       - name: "Requirements Clarifier"
@@ -63,7 +61,6 @@ stages:
   # Analyst produces the spec. Critic validates completeness.
   # Iterates up to 2 times — critic emits <!-- panel:done --> when satisfied.
   - name: "Requirements"
-    subFlow: research-edit-review
     iterations: 2
     roles:
       - name: "Requirements Analyst"
@@ -139,7 +136,6 @@ stages:
   # ── Stage 3: Architecture ─────────────────────────────────────────────────
   # Architect designs the system. Critic checks coverage against requirements.
   - name: "Architecture"
-    subFlow: research-edit-review
     iterations: 2
     roles:
       - name: "Solution Architect"
@@ -218,7 +214,6 @@ stages:
   # ── Stage 4: Specification ────────────────────────────────────────────────
   # Writer drafts docs/SDD.md. Critic reads the file and validates completeness.
   - name: "Specification"
-    subFlow: research-edit-review
     iterations: 2
     roles:
       - name: "SDD Spec Writer"
@@ -295,7 +290,6 @@ stages:
   # ── Stage 5: Planning ─────────────────────────────────────────────────────
   # Single-shot — roadmap + autonomous handoff prompt. No critic needed.
   - name: "Planning"
-    subFlow: sequence
     iterations: 1
     roles:
       - name: "Implementation Planner"

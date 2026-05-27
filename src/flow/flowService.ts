@@ -6,14 +6,14 @@
 import * as vscode from 'vscode';
 import * as yaml from 'js-yaml';
 import type {
-	IFlowDocument, IFlowRole, IFlowStage,
+	IFlowDocument, IFlowRole, IFlowStage, IFlowGroup,
 	ISkillRef, IAgentRef, IContextRef, IPromptRef,
-	OrchestrationStrategy, IsolationMode, CliMode, SubFlowPattern,
+	IsolationMode,
 } from '../types/flowDocument';
 
 // Re-export the types that other modules import from here.
 export type { ISkillRef, IAgentRef, IContextRef, IPromptRef } from '../types/flowDocument';
-export type { IFlowRole, IFlowStage, IFlowDocument, OrchestrationStrategy, IsolationMode, CliMode, SubFlowPattern };
+export type { IFlowRole, IFlowStage, IFlowGroup, IFlowDocument, IsolationMode };
 // Backward-compatible aliases used internally
 type IRoleDefinition = IFlowRole;
 type IStageDefinition = IFlowStage;
@@ -71,8 +71,35 @@ export class FlowService {
 			// Parse stages (structured mode) or flat roles (legacy mode)
 			const stages = header.stages ? this.parseStages(header.stages) : undefined;
 			const roles = Array.isArray(header.roles) ? this.parseRoles(header.roles) : [];
-			if (!stages && roles.length < 2) {
-				throw new Error('Flow requires either stages with roles or at least 2 top-level roles');
+			const groups = header.groups ? this.parseGroups(header.groups) : undefined;
+			const join = header.join ? this.parseJoin(header.join) : undefined;
+
+			// Task 3.3: deprecation warning for old orchestration field
+			if (header.orchestration !== undefined) {
+				vscode.window.showWarningMessage(
+					`Flow file "${uri.fsPath}" has a deprecated 'orchestration:' field. Remove it — the pattern is now inferred from 'roles:', 'stages:', or 'groups:'.`
+				);
+			}
+
+			// Validate root structure key XOR constraint
+			const hasRoles = roles.length > 0;
+			const hasStages = !!stages && stages.length > 0;
+			const hasGroups = !!groups && groups.length > 0;
+			const structureCount = [hasRoles, hasStages, hasGroups].filter(Boolean).length;
+			if (structureCount === 0) {
+				throw new Error("Flow requires exactly one root structure key: 'roles:', 'stages:', or 'groups:'+' join:'");
+			}
+			if (structureCount > 1) {
+				throw new Error("Flow must have exactly one root structure key — 'roles:', 'stages:', and 'groups:' are mutually exclusive");
+			}
+
+			if (hasGroups) {
+				if (!groups || groups.length < 2) {
+					throw new Error("fork-join flow requires a 'groups' array with at least 2 entries");
+				}
+				if (!join) {
+					throw new Error("fork-join flow requires a 'join' role");
+				}
 			}
 
 			// Flow-level skills applied to all roles
@@ -81,18 +108,15 @@ export class FlowService {
 			const contexts = this.parseContextRefs(header.contexts);
 
 			// Extract configuration
-			const orchestration = this.parseOrchestration(header.orchestration);
 			const tools = this.parseTools(header.tools);
-			
-			// CLI-specific properties
-			const isolation = this.parseIsolation(header.isolation);
-			const cliMode = this.parseCliMode(header.cliMode);
 			const customAgent = this.parseCustomAgent(header.customAgent);
 			const model = this.parseModel(header.model);
 
 			const totalRoles = stages
 				? stages.reduce((sum, s) => sum + s.roles.length, 0)
-				: roles.length;
+				: groups
+					? groups.reduce((sum, g) => sum + g.roles.length, 0)
+					: roles.length;
 			
 			return {
 				name: String(header.name || 'Untitled'),
@@ -108,12 +132,11 @@ export class FlowService {
 				stages,
 				skills: skills.length > 0 ? skills : undefined,
 				contexts: contexts.length > 0 ? contexts : undefined,
-				orchestration,
 				sharedContext: body,
 				promptUri: uri,
 				tools,
-				isolation,
-				cliMode,
+				...(groups ? { groups } : {}),
+				...(join ? { join } : {}),
 				customAgent,
 				model
 			};
@@ -146,6 +169,7 @@ export class FlowService {
 			const roleContexts = this.parseContextRefs(role.contexts);
 			const agent = this.parseAgentRef(role.agent);
 			const args = role.arguments ? String(role.arguments) : (role.args ? String(role.args) : undefined);
+			const delegate = role.delegate === true ? true : undefined;
 
 			// A role must have a name and at least one of: prompt or agent
 			if (name && (prompt || agent)) {
@@ -156,7 +180,8 @@ export class FlowService {
 					...(args ? { args } : {}),
 					model,
 					...(roleSkills.length > 0 ? { skills: roleSkills } : {}),
-					...(roleContexts.length > 0 ? { contexts: roleContexts } : {})
+					...(roleContexts.length > 0 ? { contexts: roleContexts } : {}),
+					...(delegate ? { delegate } : {})
 				});
 			}
 		}
@@ -239,16 +264,6 @@ export class FlowService {
 	}
 
 	/**
-	 * Parse sub-flow pattern, defaulting to 'sequence'
-	 */
-	private parseSubFlowPattern(value: unknown): SubFlowPattern {
-		if (value === 'research-edit-review' || value === 'plan-execute-test-fix') {
-			return value;
-		}
-		return 'sequence';
-	}
-
-	/**
 	 * Parse stages array from YAML
 	 */
 	private parseStages(stagesData: unknown): IStageDefinition[] {
@@ -265,7 +280,6 @@ export class FlowService {
 			if (!name) {
 				continue;
 			}
-			const subFlow = this.parseSubFlowPattern(stage.subFlow);
 			const iterations = typeof stage.iterations === 'number' ? Math.max(1, stage.iterations) : 1;
 			const doneWord = typeof stage.doneWord === 'string' && stage.doneWord.trim() ? stage.doneWord.trim() : undefined;
 			const roles = Array.isArray(stage.roles) ? this.parseRoles(stage.roles) : [];
@@ -274,7 +288,6 @@ export class FlowService {
 			if (roles.length >= 1) {
 				stages.push({
 					name,
-					subFlow,
 					iterations,
 					...(doneWord ? { doneWord } : {}),
 					roles,
@@ -286,25 +299,6 @@ export class FlowService {
 		return stages;
 	}
 
-	/**
-	 * Parse orchestration strategy
-	 */
-	private parseOrchestration(value: unknown): OrchestrationStrategy {
-		if (typeof value === 'string') {
-			if (value === 'sequence' || value === 'cli') {
-				return value;
-			}
-			// Support legacy values for backward compatibility during development
-			if (value === 'sequential') {
-				return 'sequence';
-			}
-			if (value === 'all-respond') {
-				return 'cli';
-			}
-		}
-		return 'sequence'; // default
-	}
-	
 	/**
 	 * Parse difficulty level
 	 */
@@ -328,17 +322,54 @@ export class FlowService {
 		}
 		return undefined;
 	}
-	
+
 	/**
-	 * Parse CLI mode from YAML
+	 * Parse groups array from YAML (parallel orchestration).
 	 */
-	private parseCliMode(value: unknown): CliMode | undefined {
-		if (typeof value === 'string') {
-			if (value === 'supervised' || value === 'autonomous') {
-				return value;
-			}
+	private parseGroups(groupsData: unknown): IFlowGroup[] {
+		if (!Array.isArray(groupsData)) {
+			return [];
 		}
-		return undefined;
+		const groups: IFlowGroup[] = [];
+		for (const item of groupsData) {
+			if (typeof item !== 'object' || item === null) {
+				continue;
+			}
+			const g = item as Record<string, unknown>;
+			const name = g.name ? String(g.name) : undefined;
+			if (!name) {
+				continue;
+			}
+			const roles = Array.isArray(g.roles) ? this.parseRoles(g.roles) : [];
+			if (roles.length === 0) {
+				continue;
+			}
+			const isolation = this.parseIsolation(g.isolation);
+			const model = g.model ? String(g.model) : undefined;
+			const skills = this.parseSkillRefs(g.skills);
+			const contexts = this.parseContextRefs(g.contexts);
+			groups.push({
+				name,
+				roles,
+				...(isolation ? { isolation } : {}),
+				...(model ? { model } : {}),
+				...(skills.length > 0 ? { skills } : {}),
+				...(contexts.length > 0 ? { contexts } : {}),
+			});
+		}
+		return groups;
+	}
+
+	/**
+	 * Parse the join role from YAML (parallel orchestration).
+	 * Accepts the same shape as a regular role object.
+	 */
+	private parseJoin(value: unknown): IFlowRole | undefined {
+		if (typeof value !== 'object' || value === null) {
+			return undefined;
+		}
+		const parsed = this.parseRoles([value]);
+		return parsed[0];
 	}
 	
 	/**
@@ -413,12 +444,24 @@ export class FlowService {
 	validate(config: IFlowConfig): { valid: boolean; errors: string[] } {
 		const errors: string[] = [];
 
-		if (config.stages) {
-			// Stage-based validation
-			if (config.stages.length === 0) {
+		// Root key XOR validation
+		const hasStages = !!config.stages && config.stages.length > 0;
+		const hasGroups = !!config.groups && config.groups.length > 0;
+		const hasPipelineRoles = !hasStages && !hasGroups && config.roles.length > 0;
+		const structureCount = [hasPipelineRoles, hasStages, hasGroups].filter(Boolean).length;
+		if (structureCount === 0) {
+			errors.push("Flow requires exactly one root structure key: 'roles:' (pipeline), 'stages:' (iterative), or 'groups:'+'join:' (fork-join)");
+		}
+		if (structureCount > 1) {
+			errors.push("Flow must use exactly one root structure key — 'roles:', 'stages:', and 'groups:' are mutually exclusive");
+		}
+
+		if (hasStages) {
+			// Stage-based (iterative) validation
+			if (config.stages!.length === 0) {
 				errors.push('At least one stage is required');
 			}
-			for (const stage of config.stages) {
+			for (const stage of config.stages!) {
 				if (!stage.name.trim()) {
 					errors.push('Stage name cannot be empty');
 				}
@@ -434,13 +477,13 @@ export class FlowService {
 					}
 				}
 			}
-		} else {
-			// Flat role validation (legacy)
-			if (config.roles.length < 2) {
-				errors.push('At least 2 roles are required');
+		} else if (hasPipelineRoles) {
+			// Pipeline (flat roles) validation
+			if (config.roles.length < 1) {
+				errors.push('At least 1 role is required');
 			}
-			if (config.roles.length > 10) {
-				errors.push('Maximum 10 roles allowed');
+			if (config.roles.length > 50) {
+				errors.push('Maximum 50 roles allowed');
 			}
 			const roleNames = new Set<string>();
 			for (const role of config.roles) {
@@ -456,18 +499,26 @@ export class FlowService {
 				}
 			}
 		}
-		
-		// Validate CLI-specific properties
-		if (config.orchestration === 'cli') {
-			if (config.isolation && config.isolation !== 'workspace' && config.isolation !== 'worktree') {
-				errors.push('Isolation must be "workspace" or "worktree"');
+
+		// Validate fork-join structure
+		if (hasGroups) {
+			if (!config.groups || config.groups.length < 2) {
+				errors.push("fork-join flow requires a 'groups' array with at least 2 entries");
+			} else {
+				for (const group of config.groups) {
+					if (!group.name || !group.name.trim()) {
+						errors.push(`group name cannot be empty`);
+					}
+					if (!group.roles || group.roles.length === 0) {
+						errors.push(`group '${group.name}' must have at least 1 role`);
+					}
+				}
 			}
-			
-			if (config.cliMode && config.cliMode !== 'supervised' && config.cliMode !== 'autonomous') {
-				errors.push('CLI mode must be "supervised" or "autonomous"');
+			if (!config.join) {
+				errors.push("fork-join flow requires a 'join' role");
 			}
 		}
-		
+
 		return {
 			valid: errors.length === 0,
 			errors

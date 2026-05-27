@@ -2,7 +2,6 @@ name: "SDD + OpenSpec Full Cycle"
 description: "End-to-end pipeline: one human gate → staged SDD specification with LLM critics → OpenSpec change scaffolding → phased implementation → archive. Idea to merged PR without leaving the conversation."
 category: "software-development"
 subcategory: "specification"
-orchestration: sequence
 difficulty: advanced
 tags: ["sdd", "spec-kit", "openspec", "requirements", "architecture", "implementation", "full-cycle", "long-running", "autonomous", "staged"]
 version: "1.0.0"
@@ -13,6 +12,7 @@ skills:
   - openspec-apply-change
   - openspec-archive-change
 tools:
+  - vscode_askQuestions
   - copilot_readFile
   - copilot_findTextInFiles
   - copilot_listDirectory
@@ -27,7 +27,6 @@ stages:
   # Single-shot — produces questions + assumptions for human to answer.
   # The ONLY mandatory human gate in the entire pipeline.
   - name: "Clarification"
-    subFlow: sequence
     iterations: 1
     roles:
       - name: "Requirements Clarifier"
@@ -36,38 +35,32 @@ stages:
           Your output gates the ENTIRE downstream pipeline — be surgical, not exhaustive.
 
           Process:
-          1. Analyse the user's idea; read any referenced files or codebase context via tools
-          2. Identify the 4-6 highest-value unknowns that, if unresolved, would cause rework
-          3. For each question, state your DEFAULT ASSUMPTION so the flow continues without an answer
+          1. Analyse the user's idea; read any referenced files or codebase context via tools.
+          2. Identify the 4-6 highest-value unknowns that, if unresolved, would cause rework.
+          3. Call the `vscode_askQuestions` tool ONCE with all questions in a single invocation.
+             - For each question, provide 3-5 concrete option labels (the user can still type a
+               custom answer). Make the most sensible default the first option.
+             - Keep question text to one sentence — the option labels carry the nuance.
+          4. Wait for the user's answers, then output your Preliminary Scope Boundary.
 
-          Output format (strict — downstream stages parse this structure):
-
-          ## Clarifying Questions
-
-          Answer any of these to sharpen the design. Leave blank to accept the stated assumptions.
-
-          1. **[Topic]**: [One specific question]
-             > Assumption if unanswered: [concrete default]
-
-          (repeat for each question — max 6)
+          After the tool returns the answers, output:
 
           ## Preliminary Scope Boundary
 
           **In scope** (committed):
-          - [item]
+          - [item — derived from answers or defaults]
 
           **Out of scope** (deferred):
           - [item]
 
-          **Biggest open risk**: [one sentence — the thing most likely to invalidate this design]
+          **Assumptions accepted** (questions left unanswered):
+          - [question topic]: [the default you are proceeding with]
 
-          ---
-          > Reply to these questions, or reply "proceed with assumptions" to continue autonomously.
+          **Biggest open risk**: [one sentence — the thing most likely to invalidate this design]
 
   # ── Stage 2: Requirements ─────────────────────────────────────────────────
   # Analyst produces the spec. Critic validates completeness.
   - name: "Requirements"
-    subFlow: research-edit-review
     iterations: 2
     roles:
       - name: "Requirements Analyst"
@@ -143,7 +136,6 @@ stages:
   # ── Stage 3: Architecture ─────────────────────────────────────────────────
   # Architect designs the system. Critic checks coverage against requirements.
   - name: "Architecture"
-    subFlow: research-edit-review
     iterations: 2
     roles:
       - name: "Solution Architect"
@@ -222,7 +214,6 @@ stages:
   # ── Stage 4: Specification ────────────────────────────────────────────────
   # Writer drafts docs/SDD.md. Critic reads the file and validates completeness.
   - name: "Specification"
-    subFlow: research-edit-review
     iterations: 2
     roles:
       - name: "SDD Spec Writer"
@@ -299,7 +290,6 @@ stages:
   # ── Stage 5: OpenSpec Bridge ──────────────────────────────────────────────
   # Converts the completed SDD into an OpenSpec change with full artifact set.
   - name: "OpenSpec Bridge"
-    subFlow: research-edit-review
     iterations: 2
     roles:
       - name: "OpenSpec Scaffolding Agent"
@@ -435,8 +425,7 @@ stages:
   # ── Stage 6: Implementation ───────────────────────────────────────────────
   # Executes phases from tasks.md using the openspec-apply-change workflow.
   - name: "Implementation"
-    subFlow: research-edit-review
-    iterations: 5
+    iterations: 50
     roles:
       - name: "Phase Executor"
         prompt: |
@@ -509,7 +498,6 @@ stages:
   # ── Stage 7: Archive ──────────────────────────────────────────────────────
   # Closes the full cycle by archiving the completed change.
   - name: "Archive"
-    subFlow: sequence
     iterations: 1
     roles:
       - name: "Archivist"

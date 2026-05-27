@@ -4,7 +4,7 @@
   "title": "Copilot AI Flow",
   "description": "Defines a multi-perspective AI flow discussion with configurable expert roles.",
   "type": "object",
-  "required": ["name", "orchestration"],
+  "required": ["name"],
   "additionalProperties": false,
   "properties": {
     "name": {
@@ -18,8 +18,8 @@
     },
     "orchestration": {
       "type": "string",
-      "enum": ["sequence", "cli"],
-      "description": "How roles interact.\n\n- `sequence`: Sequential execution via the language model API. Roles respond one after another.\n- `cli`: SDK/CLI delegation — the panel runs as a background agent via the GitHub Copilot CLI."
+      "enum": ["sequence", "parallel"],
+      "description": "DEPRECATED — no longer used. Remove from your flow file. The execution pattern is now determined automatically from the root key: `roles:` → pipeline, `stages:` → iterative, `groups:`+`join:` → fork-join."
     },
     "category": {
       "type": "string",
@@ -58,7 +58,7 @@
     },
     "model": {
       "type": "string",
-      "description": "Panel-level model override. When `orchestration` is `cli` this sets the background agent's model. Individual roles can override with their own `model` field.",
+      "description": "Panel-level model override. Individual roles can override with their own `model` field.",
       "examples": ["claude-sonnet-4.5", "claude-haiku-4.5", "claude-opus-4.5", "gpt-5", "gpt-5.1"]
     },
     "tools": {
@@ -100,19 +100,19 @@
       "type": "string",
       "description": "Optional context shared with all roles before the user query. Supports markdown formatting."
     },
-    "isolation": {
-      "type": "string",
-      "enum": ["workspace", "worktree"],
-      "description": "CLI orchestration only. Where changes are applied.\n\n- `workspace`: Applied directly to the active workspace (default).\n- `worktree`: Applied in an isolated Git worktree for safe experimentation."
+    "groups": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/group" },
+      "minItems": 2,
+      "description": "Parallel orchestration only. Independent workstreams that execute concurrently and converge at the `join` role. Each group's roles run sequentially within the group. Requires at least 2 groups."
     },
-    "cliMode": {
-      "type": "string",
-      "enum": ["supervised", "autonomous"],
-      "description": "CLI orchestration only. Permission and interaction model.\n\n- `supervised`: User approves each tool call interactively (default).\n- `autonomous`: Agent executes with minimal confirmation prompts."
+    "join": {
+      "$ref": "#/definitions/role",
+      "description": "Parallel orchestration only. The synthesising role that evaluates all group outputs. Executed after all groups complete. Receives each group's output as a labeled context file `[Group: <name>]`."
     },
     "customAgent": {
       "type": "string",
-      "description": "CLI orchestration only. Agent identifier for specialized behaviour.",
+      "description": "Agent identifier for specialised behaviour.",
       "examples": ["___vscode_default___", "code-review", "test-writer"]
     }
   },
@@ -240,22 +240,58 @@
           "type": "array",
           "items": { "$ref": "#/definitions/contextRef" },
           "description": "Additional context files injected into this role's system prompt only. Merged with flow-level and stage-level contexts. Use for role-specific guidelines or reference material."
+        },
+        "delegate": {
+          "type": "boolean",
+          "description": "When `true`, routes execution through the Copilot SDK agent runtime (`callRoleAgent`) instead of the VS Code LM API (`callRole`). Orthogonal to `agent:` — `agent:` controls the prompt content source; `delegate:` controls the execution path."
+        }
+      }
+    },
+    "group": {
+      "type": "object",
+      "required": ["name", "roles"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Display name for this group (e.g. `React Team`, `Vue Team`)."
+        },
+        "roles": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/role" },
+          "minItems": 1,
+          "description": "Roles that execute sequentially within this group."
+        },
+        "isolation": {
+          "type": "string",
+          "enum": ["workspace", "worktree"],
+          "description": "Where this group's agent applies changes.\n\n- `workspace`: Applied directly to the active workspace.\n- `worktree`: Applied in an isolated Git worktree for safe experimentation."
+        },
+        "model": {
+          "type": "string",
+          "description": "Model override for all roles in this group. Role-level `model` takes precedence.",
+          "examples": ["claude-sonnet-4.5", "claude-haiku-4.5", "gpt-5"]
+        },
+        "skills": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/skillRef" },
+          "description": "Skills injected into every role in this group. Merged with flow-level skills."
+        },
+        "contexts": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/contextRef" },
+          "description": "Additional context files injected into every role in this group. Merged with flow-level contexts."
         }
       }
     },
     "stage": {
       "type": "object",
-      "required": ["name", "subFlow", "iterations", "roles"],
+      "required": ["name", "iterations", "roles"],
       "additionalProperties": false,
       "properties": {
         "name": {
           "type": "string",
           "description": "Display name shown in the chat stream as the stage header."
-        },
-        "subFlow": {
-          "type": "string",
-          "enum": ["sequence", "research-edit-review", "plan-execute-test-fix"],
-          "description": "Execution pattern for roles within this stage.\n\n- `sequence`: Roles run in order, no iteration semantics.\n- `research-edit-review`: Researcher → Editor → Critic. Critic emits `doneWord` to converge early.\n- `plan-execute-test-fix`: Planner → Executor → Tester (→ Fixer). Tester emits `doneWord` when passing."
         },
         "iterations": {
           "type": "integer",

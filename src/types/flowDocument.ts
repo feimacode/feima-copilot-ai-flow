@@ -15,10 +15,7 @@
 // Primitive enumerations
 // ---------------------------------------------------------------------------
 
-export type OrchestrationStrategy = 'sequence' | 'cli';
 export type IsolationMode = 'workspace' | 'worktree';
-export type CliMode = 'supervised' | 'autonomous';
-export type SubFlowPattern = 'sequence' | 'research-edit-review' | 'plan-execute-test-fix';
 
 // ---------------------------------------------------------------------------
 // Reference types
@@ -69,14 +66,17 @@ export interface IFlowRole {
 	readonly skills?: ReadonlyArray<ISkillRef>;
 	/** Context files injected into this role's prompt (merged with flow- and stage-level contexts). */
 	readonly contexts?: ReadonlyArray<IContextRef>;
+        /**
+         * When `true`, execution is routed through `callRoleAgent()` (Copilot SDK runtime)
+         * instead of `callRole()` (VS Code LM API). Orthogonal to `agent:` (content source).
+         */
+	readonly delegate?: boolean;
 }
 
 /** A stage as defined in the YAML document. */
 export interface IFlowStage {
 	/** Display name shown in the chat stream. */
 	readonly name: string;
-	/** Sub-flow execution pattern (`sequence`, `research-edit-review`, `plan-execute-test-fix`). */
-	readonly subFlow: SubFlowPattern;
 	/** Maximum iterations (≥ 1). When `doneWord` is also set, the stage exits early as soon
 	 *  as the last role's response contains that string. If `doneWord` is not set, all
 	 *  iterations always run (no early-exit). */
@@ -93,6 +93,25 @@ export interface IFlowStage {
 	/** Skills merged with flow-level skills and injected into every role in this stage. */
 	readonly skills?: ReadonlyArray<ISkillRef>;
 	/** Context files merged with flow-level contexts and injected into every role in this stage. */
+	readonly contexts?: ReadonlyArray<IContextRef>;
+}
+
+/**
+ * A group in a parallel flow — an independent workstream with its own roles.
+ * Groups run independently and their outputs are collected for the join role.
+ */
+export interface IFlowGroup {
+	/** Display name for this group (e.g. "React Team"). */
+	readonly name: string;
+	/** Roles that execute sequentially within this group. */
+	readonly roles: ReadonlyArray<IFlowRole>;
+	/** Isolation mode for this group's background agent. */
+	readonly isolation?: IsolationMode;
+	/** LLM model override for all roles in this group. */
+	readonly model?: string;
+	/** Skills merged with flow-level skills and injected into every role in this group. */
+	readonly skills?: ReadonlyArray<ISkillRef>;
+	/** Context files merged with flow-level contexts and injected into every role in this group. */
 	readonly contexts?: ReadonlyArray<IContextRef>;
 }
 
@@ -113,10 +132,9 @@ export interface IFlowMetadata {
  * No VS Code, React, or Node.js dependencies.
  */
 export interface IFlowDocument extends IFlowMetadata {
-	readonly orchestration: OrchestrationStrategy;
-	/** Flat role list (simple flows). Ignored when `stages` is present. */
+	/** Flat role list for pipeline flows. Mutually exclusive with `stages` and `groups`. */
 	readonly roles?: ReadonlyArray<IFlowRole>;
-	/** Stage-based execution. When present, top-level `roles` is ignored. */
+	/** Stage-based execution for iterative flows. Mutually exclusive with `roles` and `groups`. */
 	readonly stages?: ReadonlyArray<IFlowStage>;
 	/** Skills applied to every role across the entire flow. */
 	readonly skills?: ReadonlyArray<ISkillRef>;
@@ -126,9 +144,10 @@ export interface IFlowDocument extends IFlowMetadata {
 	readonly tools?: ReadonlyArray<string>;
 	/** Flow-level model selection. */
 	readonly model?: string;
-	// CLI-specific
-	readonly isolation?: IsolationMode;
-	readonly cliMode?: CliMode;
+	/** Groups for parallel orchestration (fork-join pattern). Required when `orchestration` is `parallel`. */
+	readonly groups?: ReadonlyArray<IFlowGroup>;
+	/** Join role executed after all groups complete. Required when `orchestration` is `parallel`. */
+	readonly join?: IFlowRole;
 	readonly customAgent?: string;
 	/** Shared context body appended below the YAML. */
 	readonly sharedContext?: string;

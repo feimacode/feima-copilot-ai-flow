@@ -1,7 +1,6 @@
 name: "Basic Sequential Discussion"
 description: "Simple two-role sequential discussion using language model API"
 category: "software-development"
-orchestration: sequence
 difficulty: beginner
 tags:
   - basic
@@ -24,9 +23,9 @@ roles:
       Focus on concrete implementation details and code quality.
       Build upon the architect's recommendations.
 sharedContext: |
-  # Sequential Execution Mode
+  # Pipeline Execution Mode
 
-  This panel demonstrates **sequential orchestration** where roles respond one after another.
+  This panel demonstrates **pipeline** flow where roles respond one after another.
   Each role can see the previous role's response and build upon it.
 
   ## When to Use Sequential Mode

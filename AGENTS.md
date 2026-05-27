@@ -98,27 +98,52 @@ handleRequest()
 
 ### Flow File Format
 
-`.flow.yaml` files are validated against `schemas/flow.schema.json`. Key fields:
+`.flow.yaml` files are validated against `schemas/flow.schema.json`. The root structural key determines the execution pattern — exactly one of `roles:`, `stages:`, or `groups:` must be present.
 
 ```yaml
 name: string
-orchestration: sequence | cli
-roles:
+roles:                     # pipeline flow (mutually exclusive with stages/groups)
   - name: string
     prompt: string         # inline system prompt
     agent: string          # OR: name of .agent.md file in .github/agents/
     skills: [string]       # skill names or { path } objects
     contexts: [string]     # file paths or { path } objects
     model: string          # optional model override
-stages:                    # optional — wraps roles in iterative loops
+    delegate: boolean      # if true, route via Copilot SDK instead of VS Code LM API
+stages:                    # iterative flow — wraps roles in configurable loops
   - name: string
     iterations: number
     roles: [...]
+groups:                    # fork-join flow — parallel branches merged by join role
+  - name: string
+    roles: [...]
+join:                      # required with groups:
+  name: string
+  prompt: string
 contexts: [string]         # flow-level contexts, inherited by all roles
 skills: [string]           # flow-level skills, inherited by all roles
 tools: [string | "*"]
 sharedContext: string      # inline text prepended to every role's context
 ```
+
+### Flow Execution Primitives
+
+| Root key | Engine method | Pattern |
+|---|---|---|
+| `roles:` | `executePipeline()` | Sequential pipeline |
+| `stages:` | `executeIterative()` | Iterative/staged loops |
+| `groups:` + `join:` | `executeForkJoin()` | Parallel fork-join |
+
+**`delegate: true`** is a per-role annotation orthogonal to the structural pattern:
+
+| | `agent:` absent | `agent:` present |
+|---|---|---|
+| default | Inline prompt via VS Code LM | Agent file via VS Code LM |
+| `delegate: true` | Inline prompt via Copilot SDK | Agent file via Copilot SDK |
+
+> **Key distinction**: `agent:` controls the *content source* (where the system prompt comes from); `delegate:` controls the *execution path* (which runtime handles the call).
+
+For full documentation see [docs/FLOW_PRIMITIVES.md](docs/FLOW_PRIMITIVES.md).
 
 ---
 

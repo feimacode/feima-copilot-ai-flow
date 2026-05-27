@@ -438,13 +438,6 @@ body {
 	text-overflow: ellipsis;
 }
 
-.stage-group-subflow {
-	font-size: 10px;
-	color: var(--vscode-descriptionForeground, #888);
-	font-style: italic;
-	white-space: nowrap;
-}
-
 /* ---------------------------------------------------------------------------
    Canvas meta panel overlay (React Flow <Panel> top-left)
 --------------------------------------------------------------------------- */

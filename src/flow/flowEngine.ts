@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import { IFlowConfig, ISkillRef, IAgentRef, IContextRef, IPromptRef, IRoleResponse, FlowService } from './flowService';
 import { FlowContextBuilder, IFlowContext } from '../context/flowContextBuilder';
 import { FlowTurn, FlowConversationStore } from '../session/flowConversation';
-import { ContextFile, FlowPromptRenderer } from '../prompts/flowPromptRenderer';
+import { ContextFile, FlowPromptRenderer, BLOCKED_TOOLS } from '../prompts/flowPromptRenderer';
 import { ToolCallRound } from '../prompts/flowTools';
 import { normalizeToolSchemas } from '../util/toolSchemaNormalizer';
 import { filterTools, shouldFilterTools } from '../util/toolFilter';
@@ -75,17 +75,14 @@ export class FlowEngine {
 		}
 		if (config.stages) {
 			stream.markdown(`**Stages**: ${config.stages.map(s => `${s.name} (×${s.iterations ?? 1})`).join(' → ')}\n\n`);
+		} else if (config.groups) {
+			stream.markdown(`**Groups**: ${config.groups.map(g => g.name).join(', ')} → **${config.join?.name}** (join)\n\n`);
 		} else {
 			stream.markdown(`**Flow**: ${config.roles.map(r => r.name).join(', ')}\n\n`);
 		}
-		stream.markdown(`**Mode**: ${config.orchestration}\n\n`);
 
-		if (config.orchestration === 'cli') {
-			if (config.isolation) { stream.markdown(`**Isolation**: ${config.isolation}\n\n`); }
-			if (config.cliMode) { stream.markdown(`**CLI Mode**: ${config.cliMode}\n\n`); }
-			if (config.model) { stream.markdown(`**Model**: ${config.model}\n\n`); }
-			if (config.customAgent) { stream.markdown(`**Agent**: ${config.customAgent}\n\n`); }
-		}
+		if (config.model) { stream.markdown(`**Model**: ${config.model}\n\n`); }
+		if (config.customAgent) { stream.markdown(`**Agent**: ${config.customAgent}\n\n`); }
 		if (config.tools && config.tools.length > 0) {
 			stream.markdown(`**Tools**: ${config.tools.join(', ')}\n\n`);
 		}
@@ -106,34 +103,29 @@ export class FlowEngine {
 
 		const history = conversation.getHistory().slice(0, -1);
 
-		switch (config.orchestration) {
-			case 'sequence':
-				if (config.stages) {
-					const responses = await this.executeStages(
-						config, request.prompt, vsCodeContext, history, stream, token,
-						request.toolInvocationToken, request.model
-					);
-					for (const [key, content] of responses) {
-						currentTurn.responses.set(key, content);
-					}
-				} else {
-					const responses = await this.executeSequential(
-						config, request.prompt, vsCodeContext, history, stream, token,
-						request.toolInvocationToken, request.model
-					);
-					for (const [roleName, content] of responses) {
-						currentTurn.responses.set(roleName, content);
-					}
-				}
-				break;
-			case 'cli': {
-				const responses = await this.executeCli(
-					config, request.prompt, vsCodeContext, history, stream, token
-				);
-				for (const [roleName, content] of responses) {
-					currentTurn.responses.set(roleName, content);
-				}
-				break;
+		if (config.stages) {
+			const responses = await this.executeIterative(
+				config, request.prompt, vsCodeContext, history, stream, token,
+				request.toolInvocationToken, request.model
+			);
+			for (const [key, content] of responses) {
+				currentTurn.responses.set(key, content);
+			}
+		} else if (config.groups) {
+			const responses = await this.executeForkJoin(
+				config, request.prompt, vsCodeContext, history, stream, token,
+				request.toolInvocationToken, request.model
+			);
+			for (const [roleName, content] of responses) {
+				currentTurn.responses.set(roleName, content);
+			}
+		} else {
+			const responses = await this.executePipeline(
+				config, request.prompt, vsCodeContext, history, stream, token,
+				request.toolInvocationToken, request.model
+			);
+			for (const [roleName, content] of responses) {
+				currentTurn.responses.set(roleName, content);
 			}
 		}
 
@@ -141,8 +133,9 @@ export class FlowEngine {
 			metadata: {
 				roles: config.stages
 					? config.stages.flatMap(s => s.roles.map(r => r.name))
-					: config.roles.map(r => r.name),
-				orchestration: config.orchestration,
+					: config.groups
+						? [...config.groups.flatMap(g => g.roles.map(r => `${g.name}:${r.name}`)), `join:${config.join?.name}`]
+						: config.roles.map(r => r.name),
 				category: config.category
 			}
 		};
@@ -151,7 +144,7 @@ export class FlowEngine {
 	/**
 	 * Sequential orchestration: roles respond one after another
 	 */
-	async executeSequential(
+	async executePipeline(
 		config: IFlowConfig,
 		userQuery: string,
 		vsCodeContext: IFlowContext,
@@ -162,12 +155,18 @@ export class FlowEngine {
 		currentChatModel: vscode.LanguageModelChat
 	): Promise<Map<string, string>> {
 		const responses = new Map<string, string>();
-		const { tools, missingTools } = this.getFlowTools(config);
+		const { tools, missingTools, blockedTools } = this.getFlowTools(config);
 		
 		// Warn user about missing tools
 		if (missingTools.length > 0) {
 			stream.markdown(`⚠️ **Warning**: The following tools are not available and will be ignored: \`${missingTools.join('`, `')}\`\n\n`);
 			stream.markdown(`💡 **Tip**: Run the command "AI Flow: List Available Tools" to see registered tools.\n\n`);
+		}
+		
+		// Warn user about blocked tools
+		if (blockedTools.length > 0) {
+			stream.markdown(`🚫 **Blocked Tools**: The following tools are incompatible with flows and have been excluded: \`${blockedTools.join('`, `')}\`\n\n`);
+			stream.markdown(`💡 **Tip**: These tools are blocked due to technical limitations. See https://github.com/microsoft/vscode/issues/255855 for details.\n\n`);
 		}
 		
 		for (const role of config.roles) {
@@ -192,19 +191,21 @@ export class FlowEngine {
 			stream.markdown(`### ${role.name}\n\n`);
 			stream.progress(`${role.name} is thinking...`);
 			
-			const response = await this.callRole(
-				augmentedRole, 
-				userQuery, 
-				vsCodeContext, 
-				config.sharedContext,
-				contextFiles,
-				history,
-				tools,
-				stream,
-				token,
-				toolInvocationToken,
-				currentChatModel
-			);
+			const response = role.delegate
+				? await this.callRoleAgent(augmentedRole, userQuery, vsCodeContext, config.sharedContext ?? '', history, stream, token, contextFiles)
+				: await this.callRole(
+					augmentedRole, 
+					userQuery, 
+					vsCodeContext, 
+					config.sharedContext,
+					contextFiles,
+					history,
+					tools,
+					stream,
+					token,
+					toolInvocationToken,
+					currentChatModel
+				);
 			
 			responses.set(role.name, response.content);
 			
@@ -226,7 +227,7 @@ export class FlowEngine {
 	/**
 	 * Stage-based orchestration: stages run sequentially, each stage loops for iterations
 	 */
-	async executeStages(
+	async executeIterative(
 		config: IFlowConfig,
 		userQuery: string,
 		vsCodeContext: IFlowContext,
@@ -237,9 +238,12 @@ export class FlowEngine {
 		currentChatModel: vscode.LanguageModelChat
 	): Promise<Map<string, string>> {
 		const responses = new Map<string, string>();
-		const { tools, missingTools } = this.getFlowTools(config);
+		const { tools, missingTools, blockedTools } = this.getFlowTools(config);
 		if (missingTools.length > 0) {
 			stream.markdown(`⚠️ **Warning**: Tools not available and will be ignored: \`${missingTools.join('`, `')}\`\n\n`);
+		}
+		if (blockedTools.length > 0) {
+			stream.markdown(`🚫 **Blocked Tools**: The following tools are incompatible with flows and have been excluded: \`${blockedTools.join('`, `')}\`\n\n`);
 		}
 
 		let runningContext = userQuery;
@@ -250,9 +254,7 @@ export class FlowEngine {
 			}
 
 			stream.markdown(`## Stage: ${stage.name}\n`);
-			if (stage.subFlow !== 'sequence') {
-				stream.markdown(`*Sub-flow: \`${stage.subFlow}\` · up to ${stage.iterations} iteration(s)*\n\n`);
-			} else if (stage.iterations > 1) {
+			if (stage.iterations > 1) {
 				stream.markdown(`*Up to ${stage.iterations} iteration(s)*\n\n`);
 			} else {
 				stream.markdown('\n');
@@ -301,19 +303,21 @@ export class FlowEngine {
 					const contextFiles = [...refContextFiles, ...touchedContextFiles, ...flowDocContextFiles];
 					const augmentedRole = { name: role.name, prompt: augmentedSystemPrompt, model: role.model };
 
-					const response = await this.callRole(
-						augmentedRole,
-						runningContext,
-						vsCodeContext,
-						config.sharedContext,
-						contextFiles,
-						history,
-						tools,
-						stream,
-						token,
-						toolInvocationToken,
-						currentChatModel
-					);
+					const response = role.delegate
+						? await this.callRoleAgent(augmentedRole, runningContext, vsCodeContext, config.sharedContext ?? '', history, stream, token, contextFiles)
+						: await this.callRole(
+							augmentedRole,
+							runningContext,
+							vsCodeContext,
+							config.sharedContext,
+							contextFiles,
+							history,
+							tools,
+							stream,
+							token,
+							toolInvocationToken,
+							currentChatModel
+						);
 
 					lastResponse = response.content;
 					responses.set(`${stage.name}:${role.name}:iter${iter + 1}`, response.content);
@@ -353,70 +357,159 @@ export class FlowEngine {
 	}
 
 	/**
-	 * CLI orchestration: SDK/CLI delegation with background agent support
+	 * Parallel orchestration: fork-join pattern.
+	 * Each group's roles execute sequentially and independently. Group failures are
+	 * non-fatal — remaining groups continue and failed groups surface a notice to
+	 * the join role. After all groups complete, the join role evaluates their outputs
+	 * via labeled context files ([Group: <name>]).
 	 */
-	async executeCli(
+	async executeForkJoin(
 		config: IFlowConfig,
 		userQuery: string,
 		vsCodeContext: IFlowContext,
 		history: FlowTurn[],
 		stream: vscode.ChatResponseStream,
-		token: vscode.CancellationToken
+		token: vscode.CancellationToken,
+		toolInvocationToken: vscode.ChatParticipantToolToken | undefined,
+		currentChatModel: vscode.LanguageModelChat
 	): Promise<Map<string, string>> {
 		const responses = new Map<string, string>();
-		
-		stream.progress('Flow executing via GitHub Copilot SDK...');
-		
-		// Validate SDK availability
-		const availability = await this.sdkExecutor.checkAvailability();
-		if (!availability.available) {
-			stream.markdown(`⚠️ **SDK Mode Error**: ${availability.error}\n\n`);
-			stream.markdown(`💡 **Note**: CLI orchestration requires GitHub Copilot SDK. Please ensure:\n`);
-			stream.markdown(`- GitHub CLI is installed and authenticated\n`);
-			stream.markdown(`- GitHub Copilot subscription is active\n\n`);
-			return responses;
+		const groups = config.groups!;
+		const join = config.join!;
+		const { tools, missingTools, blockedTools } = this.getFlowTools(config);
+
+		if (missingTools.length > 0) {
+			stream.markdown(`⚠️ **Warning**: Tools not available and will be ignored: \`${missingTools.join('`, `')}\`\n\n`);
 		}
-		
-		const mode = config.cliMode || 'supervised';
-		const isolation = config.isolation || 'workspace';
-		stream.markdown(`✅ Using GitHub Copilot SDK (${mode} mode, ${isolation} isolation)\n\n`);
-		
-		// Resolve prompt references before passing to SDK
-		const responsePromises = config.roles.map(async role => {
-			const resolvedPrompt = role.prompt 
-				? await this.resolvePromptContent(role.prompt, config.promptUri, token) ?? ''
-				: '';
-			return this.callRoleSdk(
-				{ name: role.name, prompt: resolvedPrompt, model: role.model },
-				userQuery, vsCodeContext, config.sharedContext, history, stream, token
-			);
-		});
-		
-		const roleResponses = await Promise.all(responsePromises);
-		
-		for (let i = 0; i < config.roles.length; i++) {
+		if (blockedTools.length > 0) {
+			stream.markdown(`🚫 **Blocked Tools**: The following tools are incompatible with flows and have been excluded: \`${blockedTools.join('`, `')}\`\n\n`);
+		}
+
+		// ── FORK: run each group independently ──────────────────────────────
+		const groupOutputs = new Map<string, string>();
+
+		for (const group of groups) {
 			if (token.isCancellationRequested) {
 				return responses;
 			}
-			
-			const role = config.roles[i];
-			const response = roleResponses[i];
-			
-			responses.set(role.name, response.content);
-			
-			stream.markdown(`### ${role.name}\n\n`);
-			if (response.error) {
-				stream.markdown(`*Error: ${response.error}*\n\n`);
-			} else {
-				stream.markdown(`${response.content}\n\n`);
+
+			stream.markdown(`## Group: ${group.name}\n\n`);
+			stream.progress(`Running group: ${group.name}...`);
+
+			try {
+				let groupOutput = '';
+				const groupSkillRefs = [...(config.skills ?? []), ...(group.skills ?? [])];
+				const groupContextRefs = [...(config.contexts ?? []), ...(group.contexts ?? [])];
+
+				for (const role of group.roles) {
+					if (token.isCancellationRequested) {
+						break;
+					}
+
+					const roleSkillRefs = [...groupSkillRefs, ...(role.skills ?? [])];
+					const roleContextRefs = [...groupContextRefs, ...(role.contexts ?? [])];
+					const augmentedSystemPrompt = await this.buildAugmentedSystemPrompt(
+						role, roleSkillRefs, config.promptUri, userQuery, token
+					);
+					const flowDocContextFiles = await this.resolveContextFiles(roleContextRefs, config.promptUri, token);
+					const refContextFiles = await this.resolveReferenceFiles(vsCodeContext.references, config.promptUri, token);
+					const contextFiles = [...refContextFiles, ...flowDocContextFiles];
+					const effectiveModel = role.model ?? group.model;
+					const augmentedRole = { name: role.name, prompt: augmentedSystemPrompt, model: effectiveModel };
+
+					stream.markdown(`### ${group.name} / ${role.name}\n\n`);
+					stream.progress(`[${group.name}] ${role.name} is thinking...`);
+
+					const response = role.delegate
+						? await this.callRoleAgent(augmentedRole, userQuery, vsCodeContext, config.sharedContext ?? '', history, stream, token, contextFiles)
+						: await this.callRole(
+							augmentedRole,
+							userQuery,
+							vsCodeContext,
+							config.sharedContext,
+							contextFiles,
+							history,
+							tools,
+							stream,
+							token,
+							toolInvocationToken,
+							currentChatModel
+						);
+
+					groupOutput += response.content + '\n\n';
+					responses.set(`${group.name}:${role.name}`, response.content);
+
+					if (response.error) {
+						stream.markdown(`*Error: ${response.error}*\n\n`);
+					} else {
+						stream.markdown('\n\n');
+					}
+					if (response.model) {
+						stream.markdown(`*<sub>Model: ${response.model}</sub>*\n\n`);
+					}
+					stream.markdown('---\n\n');
+				}
+
+				groupOutputs.set(group.name, groupOutput.trim());
+
+			} catch (error) {
+				const errorMsg = error instanceof Error ? error.message : String(error);
+				this.log.error(error instanceof Error ? error : String(error), `Group "${group.name}" failed`);
+				stream.markdown(`⚠️ **Group "${group.name}" failed**: ${errorMsg}\n\n---\n\n`);
+				groupOutputs.set(group.name, `⚠ Group failed: ${errorMsg}`);
 			}
-			
-			if (response.model) {
-				stream.markdown(`*<sub>Model: ${response.model}</sub>*\n\n`);
-			}
-			stream.markdown('---\n\n');
 		}
-		
+
+		if (token.isCancellationRequested) {
+			return responses;
+		}
+
+		// ── JOIN: synthesise group outputs ───────────────────────────────────
+		const joinContextFiles: ContextFile[] = [];
+		for (const [groupName, output] of groupOutputs) {
+			joinContextFiles.push({ label: `[Group: ${groupName}]`, content: output });
+		}
+
+		stream.markdown(`## Join: ${join.name}\n\n`);
+		stream.progress(`${join.name} is evaluating group outputs...`);
+
+		const joinSkillRefs = [...(config.skills ?? []), ...(join.skills ?? [])];
+		const joinContextRefs = [...(config.contexts ?? []), ...(join.contexts ?? [])];
+		const augmentedJoinPrompt = await this.buildAugmentedSystemPrompt(
+			join, joinSkillRefs, config.promptUri, userQuery, token
+		);
+		const joinFlowContextFiles = await this.resolveContextFiles(joinContextRefs, config.promptUri, token);
+		const joinRefContextFiles = await this.resolveReferenceFiles(vsCodeContext.references, config.promptUri, token);
+		// Group outputs (labeled) take precedence; flow/ref context files follow
+		const allJoinContextFiles = [...joinContextFiles, ...joinRefContextFiles, ...joinFlowContextFiles];
+		const augmentedJoin = { name: join.name, prompt: augmentedJoinPrompt, model: join.model };
+
+		const joinResponse = await this.callRole(
+			augmentedJoin,
+			userQuery,
+			vsCodeContext,
+			config.sharedContext,
+			allJoinContextFiles,
+			history,
+			tools,
+			stream,
+			token,
+			toolInvocationToken,
+			currentChatModel
+		);
+
+		responses.set(`join:${join.name}`, joinResponse.content);
+
+		if (joinResponse.error) {
+			stream.markdown(`*Error: ${joinResponse.error}*\n\n`);
+		} else {
+			stream.markdown('\n\n');
+		}
+		if (joinResponse.model) {
+			stream.markdown(`*<sub>Model: ${joinResponse.model}</sub>*\n\n`);
+		}
+		stream.markdown('---\n\n');
+
 		return responses;
 	}
 
@@ -425,27 +518,36 @@ export class FlowEngine {
 	// ------------------------------------------------------------------
 
 	/**
-	 * Get tools array from flow config
+	 * Get tools array from flow config, filtering out blocked tools
 	 */
-	private getFlowTools(config: IFlowConfig): { tools: vscode.LanguageModelChatTool[] | undefined; missingTools: ReadonlyArray<string> } {
+	private getFlowTools(config: IFlowConfig): { tools: vscode.LanguageModelChatTool[] | undefined; missingTools: ReadonlyArray<string>; blockedTools: ReadonlyArray<string> } {
 		if (!config.tools || config.tools.length === 0) {
-			return { tools: undefined, missingTools: [] };
+			return { tools: undefined, missingTools: [], blockedTools: [] };
 		}
 		
 		const allTools = vscode.lm.tools;
 		if (!allTools) {
 			this.log.warn('vscode.lm.tools is undefined');
-			return { tools: undefined, missingTools: config.tools ?? [] };
+			return { tools: undefined, missingTools: config.tools ?? [], blockedTools: [] };
 		}
 		
 		if (config.tools.includes('*')) {
 			this.log.debug(`Wildcard '*' detected - ${allTools.length} tools available`);
-			return { tools: [...allTools], missingTools: [] };
+			// Filter out blocked tools from wildcard
+			const filteredTools = allTools.filter(tool => !BLOCKED_TOOLS.has(tool.name));
+			const blockedTools = allTools.filter(tool => BLOCKED_TOOLS.has(tool.name)).map(t => t.name);
+			if (blockedTools.length > 0) {
+				this.log.warn(`Blocked tools excluded: ${blockedTools.join(', ')}`);
+			}
+			return { tools: filteredTools.length > 0 ? filteredTools : undefined, missingTools: [], blockedTools };
 		}
 		
 		const matchedTools = allTools.filter(tool => 
 			config.tools?.includes(tool.name)
 		);
+		
+		const blockedTools = matchedTools.filter(tool => BLOCKED_TOOLS.has(tool.name)).map(t => t.name);
+		const availableTools = matchedTools.filter(tool => !BLOCKED_TOOLS.has(tool.name));
 		
 		const unmatchedTools = config.tools.filter(name => 
 			!allTools.some(tool => tool.name === name)
@@ -455,9 +557,14 @@ export class FlowEngine {
 			this.log.warn(`Tools not found: ${unmatchedTools.join(', ')}`);
 		}
 		
+		if (blockedTools.length > 0) {
+			this.log.warn(`Blocked tools excluded: ${blockedTools.join(', ')}`);
+		}
+		
 		return {
-			tools: matchedTools.length > 0 ? matchedTools : undefined,
-			missingTools: unmatchedTools
+			tools: availableTools.length > 0 ? availableTools : undefined,
+			missingTools: unmatchedTools,
+			blockedTools
 		};
 	}
 
@@ -468,22 +575,31 @@ export class FlowEngine {
 	/**
 	 * Call a role using GitHub Copilot SDK
 	 */
-	private async callRoleSdk(
+	private async callRoleAgent(
 		role: { name: string; prompt: string; model?: string },
 		userQuery: string,
 		vsCodeContext: IFlowContext,
 		sharedContext: string,
 		history: FlowTurn[],
 		stream: vscode.ChatResponseStream,
-		token: vscode.CancellationToken
+		token: vscode.CancellationToken,
+		contextFiles?: ContextFile[]
 	): Promise<IRoleResponse> {
 		try {
+			// Serialize context files into sharedContext for SDK execution
+			let effectiveSharedContext = sharedContext;
+			if (contextFiles && contextFiles.length > 0) {
+				const filesSection = contextFiles.map(f => `## ${f.label}\n\`\`\`\n${f.content}\n\`\`\``).join('\n\n');
+				effectiveSharedContext = effectiveSharedContext
+					? `${effectiveSharedContext}\n\n${filesSection}`
+					: filesSection;
+			}
 			const result = await this.sdkExecutor.executeCopilotSdk({
 				roleName: role.name,
 				prompt: role.prompt,
 				userQuery,
 				context: vsCodeContext,
-				sharedContext,
+				sharedContext: effectiveSharedContext,
 				history,
 				model: role.model,
 				token,
@@ -496,7 +612,7 @@ export class FlowEngine {
 			
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
-			this.log.error(error instanceof Error ? error : String(error), `Error in callRoleSdk for ${role.name}`);
+			this.log.error(error instanceof Error ? error : String(error), `Error in callRoleAgent for ${role.name}`);
 			return {
 				roleName: role.name,
 				content: '',

@@ -1,20 +1,36 @@
-# CLI Delegation and Background Agents Architecture
+# Fork-Join and CLI Delegation Architecture
 
 ## Overview
 
-The CLI Delegation and Background Agents system enables users to delegate coding tasks from VS Code Chat to autonomous background agents powered by the Copilot CLI. Background agents run independently via command-line interfaces and can work in isolated Git worktrees to prevent conflicts with active workspace changes.
+This document describes the fork-join execution pattern and the `delegate: true` role annotation for routing execution through the GitHub Copilot CLI/SDK.
 
-This architecture builds upon the [Chat Sessions API](./08-chat-sessions.md) to provide seamless integration between VS Code's UI and the autonomous Copilot CLI.
+### `delegate: true` — SDK Delegation
+
+Setting `delegate: true` on a role routes its execution through the **GitHub Copilot SDK** (background agent CLI) instead of the VS Code Language Model API. This replaces the former `orchestration: cli` flow-level setting.
+
+```yaml
+roles:
+  - name: Implementer
+    agent: .github/agents/coder.agent.md
+    delegate: true    # routes via Copilot SDK
+  - name: Reviewer
+    prompt: Review the implementation.
+    # default: routes via VS Code LM API
+```
+
+`delegate` is orthogonal to `agent:`:
+- **`agent:`** controls the *content source* (where the system prompt comes from)
+- **`delegate:`** controls the *execution path* (VS Code LM API vs. Copilot SDK)
+
+### Fork-Join Pattern (`groups:` + `join:`)
 
 ### Key Features
 
-- **Dual Invocation Modes**: Delegate from VS Code Chat OR run standalone in terminal
-- **Worktree Isolation**: Background agents work in separate Git worktrees
-- **Session Persistence**: CLI SDK persists full session history to disk (~/.copilot/session-state/)
-- **Model Selection**: Per-session model configuration with fallback to defaults
-- **Custom Agents**: Support for specialized agent personas and behaviors
-- **Permission Management**: Interactive approval for file edits and shell commands
-- **Terminal Integration**: Resume sessions in VS Code terminal for direct CLI interaction
+- **Fork-Join Pattern**: Multiple groups work independently, then a `join` role synthesises their outputs
+- **Worktree Isolation**: Per-group optional isolation in separate Git worktrees
+- **Model Selection**: Per-group and per-role model configuration with flow-level fallback
+- **Custom Agents**: Support for specialised agent personas and behaviours
+- **Group-Level Skills & Contexts**: Each group can declare its own skills and context files
 
 ### Component Architecture
 

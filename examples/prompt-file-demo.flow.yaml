@@ -8,7 +8,6 @@ tags:
   - prompt-files
   - example
 
-orchestration: sequence
 
 roles:
   # Inline prompt (traditional format)

@@ -32,6 +32,20 @@ export interface ToolCallsProps extends BasePromptElementProps {
 const dummyCancellationToken: vscode.CancellationToken = new vscode.CancellationTokenSource().token;
 
 /**
+ * Tools that are blocked from use in flows due to incompatibility with nested
+ * Prompt-TSX rendering (see https://github.com/microsoft/vscode/issues/255855).
+ *
+ * These tools are filtered out before being passed to the LLM. The flow engine
+ * will warn the user if a flow requests a blocked tool.
+ *
+ * Currently empty — no known issues after testing. Add tools here only after
+ * confirming they fail with nested Prompt-TSX rendering.
+ */
+export const BLOCKED_TOOLS = new Set<string>([
+	// Currently empty — no known issues after testing
+]);
+
+/**
  * Render a set of tool calls, which look like an AssistantMessage with a set of tool calls followed by the associated UserMessages containing results.
  */
 export class ToolCalls extends PromptElement<ToolCallsProps, void> {
@@ -89,62 +103,33 @@ class ToolResultElement extends PromptElement<ToolResultElementProps, void> {
 		if (!toolResult) {
 			console.log(`[ToolResultElement] Invoking tool ${this.props.toolCall.name}`);
 			
-			// Handle file creation tools directly using VS Code API
-			// This bypasses the "Invalid stream" error from vscode.lm.invokeTool
-			if (this.props.toolCall.name === 'copilot_createFile' || this.props.toolCall.name === 'create_file') {
-				try {
-					const input = this.props.toolCall.input as { filePath?: string; content?: string };
-					if (!input.filePath || !input.content) {
-						throw new Error('Missing filePath or content parameter');
-					}
-					
-					const fileUri = vscode.Uri.file(input.filePath);
-					const fileContent = new TextEncoder().encode(input.content);
-					
-					await vscode.workspace.fs.writeFile(fileUri, fileContent);
-					
-					toolResult = {
-						content: [new vscode.LanguageModelTextPart(`File created successfully: ${input.filePath}`)]
-					};
-					console.log(`[ToolResultElement] File created: ${input.filePath}`);
-				} catch (error) {
-					console.error(`[ToolResultElement] File creation failed:`, error);
-					const fallbackResult: vscode.LanguageModelToolResult = {
-						content: [new vscode.LanguageModelTextPart(`File creation error: ${error instanceof Error ? error.message : String(error)}`)]
-					};
-					return (
-						<ToolMessage toolCallId={this.props.toolCall.callId}>
-							<meta value={new ToolResultMetadata(this.props.toolCall.callId, fallbackResult)}></meta>
-							File creation error: {error instanceof Error ? error.message : String(error)}
-						</ToolMessage>
-					);
-				}
-			} else {
-				// For other tools, use vscode.lm.invokeTool without toolInvocationToken
-				// to avoid "Invalid stream" errors
-				try {
-					toolResult = await vscode.lm.invokeTool(
-						this.props.toolCall.name,
-						{ 
-							input: this.props.toolCall.input, 
-							toolInvocationToken: undefined, 
-							tokenizationOptions 
-						},
-						dummyCancellationToken
-					);
-					console.log(`[ToolResultElement] Tool ${this.props.toolCall.name} invocation completed`);
-				} catch (error) {
-					console.error(`[ToolResultElement] Tool ${this.props.toolCall.name} invocation threw error:`, error);
-					const fallbackResult: vscode.LanguageModelToolResult = {
-						content: [new vscode.LanguageModelTextPart(`Tool error: ${error instanceof Error ? error.message : String(error)}`)]
-					};
-					return (
-						<ToolMessage toolCallId={this.props.toolCall.callId}>
-							<meta value={new ToolResultMetadata(this.props.toolCall.callId, fallbackResult)}></meta>
-							Tool error: {String(error)}
-						</ToolMessage>
-					);
-				}
+			// Always pass the toolInvocationToken to enable approval dialogs,
+			// inline UI, and other session-aware features. Blocked tools are
+			// filtered out before reaching this point (see flowEngine.ts).
+			const invocationToken = this.props.toolInvocationToken;
+
+			try {
+				toolResult = await vscode.lm.invokeTool(
+					this.props.toolCall.name,
+					{
+						input: this.props.toolCall.input,
+						toolInvocationToken: invocationToken,
+						tokenizationOptions
+					},
+					dummyCancellationToken
+				);
+				console.log(`[ToolResultElement] Tool ${this.props.toolCall.name} invocation completed`);
+			} catch (error) {
+				console.error(`[ToolResultElement] Tool ${this.props.toolCall.name} invocation threw error:`, error);
+				const fallbackResult: vscode.LanguageModelToolResult = {
+					content: [new vscode.LanguageModelTextPart(`Tool error: ${error instanceof Error ? error.message : String(error)}`)]
+				};
+				return (
+					<ToolMessage toolCallId={this.props.toolCall.callId}>
+						<meta value={new ToolResultMetadata(this.props.toolCall.callId, fallbackResult)}></meta>
+						Tool error: {String(error)}
+					</ToolMessage>
+				);
 			}
 		}
 

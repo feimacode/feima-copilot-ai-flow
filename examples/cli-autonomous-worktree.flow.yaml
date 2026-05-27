@@ -1,207 +1,125 @@
-name: "CLI Autonomous Worktree"
-description: "SDK delegation with autonomous mode and worktree isolation"
+name: "Parallel Autonomous Worktrees"
+description: "Fork-join with per-group worktree isolation — two independent teams build and test in separate worktrees, then a join role verifies the integration."
 category: "software-development"
-orchestration: cli
-isolation: worktree
-cliMode: autonomous
 model: "claude-sonnet-4.5"
 customAgent: "___vscode_default___"
 difficulty: advanced
-tags: ["cli", "autonomous", "worktree", "isolation"]
-version: "1.0.0"
+tags: ["parallel", "worktree", "isolation", "fork-join"]
+version: "2.0.0"
 author: "IX"
-roles:
-  - name: "Feature Developer"
-    prompt: |
-      You are an autonomous feature developer.
-      Implement complete features from specifications.
 
-      Process:
-      1. Read existing code to understand context
-      2. Create new files as needed
-      3. Modify existing files carefully
-      4. Add tests for new functionality
-      5. Update documentation
+groups:
+  - name: "Feature Team"
+    isolation: worktree
+    roles:
+      - name: "Feature Developer"
+        prompt: |
+          You are an autonomous feature developer.
+          Implement complete features from specifications.
 
-      Write production-quality code with proper error handling.
-  - name: "Test Engineer"
-    prompt: |
-      You are a test automation engineer.
-      Ensure all new code has comprehensive test coverage.
+          Process:
+          1. Read existing code to understand context
+          2. Create new files as needed
+          3. Modify existing files carefully
+          4. Update documentation
 
-      For each feature:
-      - Generate unit tests
-      - Add integration tests if needed
-      - Test edge cases and error conditions
-      - Verify tests pass
+          Write production-quality code with proper error handling.
 
-      Use the project's testing framework and patterns.
+  - name: "Test Team"
+    isolation: worktree
+    roles:
+      - name: "Test Engineer"
+        prompt: |
+          You are a test automation engineer.
+          Write comprehensive tests for the feature described in the user query.
+
+          For each feature:
+          - Generate unit tests covering happy paths
+          - Add edge-case tests
+          - Test error conditions and boundaries
+
+          Use the project's existing testing framework and conventions.
+
+join:
+  name: "Integration Reviewer"
+  prompt: |
+    You are a senior integration reviewer.
+    You receive independent outputs from a Feature Team and a Test Team.
+
+    Your job:
+    1. Review the feature implementation against the tests
+    2. Identify any gaps — untested code paths or failing assertions
+    3. Recommend which worktree to merge first (or whether to combine both)
+    4. List any conflicts or integration issues
+
+    Be concise: a numbered list of findings followed by a clear recommendation.
 
 sharedContext: |
-  # CLI Autonomous Mode with Worktree Isolation
+  # Fork-Join with Worktree Isolation
 
-  This panel demonstrates **CLI orchestration** with autonomous execution in an isolated Git worktree.
+  This example demonstrates the **fork-join** pattern with **per-group worktree isolation**.
 
-  ## Key Features
-
-  - **SDK Delegation**: Uses GitHub Copilot SDK for background execution
-  - **Autonomous Mode**: Minimal user interaction, auto-executes approved actions
-  - **Worktree Isolation**: Creates separate Git worktree for safe experimentation
-  - **Session Persistence**: Full session history saved to `~/.copilot/session-state/`
+  - Two independent groups run in separate Git worktrees so their changes never conflict
+  - The **join** role receives both outputs and decides how to integrate them
+  - Add `delegate: true` to any role to route it through the GitHub Copilot SDK for autonomous background execution
 
   ## Worktree Workflow
 
-  1. Panel starts → creates new worktree:
-     ```
-     ~/project/.git/worktrees/copilot-cli-<uuid>/
-     ~/copilot-cli-<uuid>/  (working directory)
-     ```
+  1. Each group's agent creates its own isolated worktree
+  2. Feature Team writes the implementation
+  3. Test Team writes the tests (independently and in parallel)
+  4. Integration Reviewer evaluates both outputs and recommends a merge plan
 
-  2. All changes happen in isolated worktree
-  3. Your main workspace remains untouched
-  4. Review changes when complete
-  5. Apply to main workspace or discard
+  ## SDK Delegation
 
-  ## Autonomous Execution
+  To run a role autonomously via the Copilot SDK instead of the VS Code LM API,
+  add `delegate: true`:
 
-  - Agent makes decisions without constant prompts
-  - File edits auto-approved within worktree
-  - Shell commands follow safety guidelines
-  - Batch confirmations for major operations
+  ```yaml
+  groups:
+    - name: "Feature Team"
+      roles:
+        - name: "Feature Developer"
+          agent: .github/agents/coder.agent.md
+          delegate: true   # routes via Copilot SDK
+  ```
 
   ## Example Usage
 
   ```
-  @panel #file:cli-autonomous-worktree.flow.yaml
+  @flow #file:cli-autonomous-worktree.flow.yaml
 
   Add user authentication feature with JWT tokens:
   - Login endpoint
   - Token validation middleware
   - Password hashing
-  - Unit tests
   ```
 
-  ## Execution Flow
-
-  1. **Worktree Creation**: Creates isolated branch `copilot-cli-abc123`
-  2. **Feature Development**: Agent implements feature autonomously
-  3. **Testing**: Agent runs tests to verify functionality
-  4. **Completion**: Changes committed to worktree
-  5. **Review**: User reviews changes in separate directory
-  6. **Apply**: Merge changes to main workspace when ready
-
-  ## When to Use This Mode
+  ## When to Use
 
   - **Large features** requiring multiple files
-  - **Experimental changes** you want to test first
-  - **Parallel work** while you edit other files
+  - **Parallel work** — two teams build and test simultaneously without conflicts
+  - **Experimental changes** you want to review before merging
   - **High-confidence tasks** with clear requirements
-  - **Learning sessions** where mistakes are acceptable
-
-  ## Safety Features
-
-  - Changes isolated from main workspace
-  - Can discard entire worktree if needed
-  - Review diffs before merging
-  - Full rollback capability
-  - No risk to active work
-
-  ## Session Persistence
-
-  All execution is saved to disk:
-  ```
-  ~/.copilot/session-state/cli-<uuid>.jsonl
-  ```
-
-  Session includes:
-  - All role interactions
-  - Tool invocations
-  - File modifications
-  - Error messages
-  - Complete history
-
-  ## Resuming Sessions
-
-  ```
-  # List recent sessions
-  AI Panel: List Background Sessions
-
-  # Resume specific session
-  AI Panel: Resume Session <session-id>
-
-  # View session in VS Code
-  Right-click session → Open as Editor
-  ```
-
-  ## Post-Execution Actions
-
-  ### Review Changes
-  ```bash
-  cd ~/copilot-cli-abc123
-  git diff main  # See all changes
-  ```
-
-  ### Apply to Main Workspace
-  ```
-  # In VS Code:
-  1. Right-click session → "Apply Changes"
-  2. Review diffs in VS Code
-  3. Accept or reject changes
-  ```
-
-  ### Discard Changes
-  ```
-  AI Panel: Delete Session and Worktree
-  ```
 
   ## Advanced Usage
 
-  ### With Custom Agent
+  ### With multiple specialised roles and SDK delegation
   ```yaml
-  orchestration: cli
-  isolation: worktree
-  cliMode: autonomous
-  customAgent: "feature-developer"  # Your custom agent
+  groups:
+    - name: "Backend"
+      roles:
+        - name: "Backend Developer"
+          prompt: Focus on server-side implementation
+          model: "claude-sonnet-4.5"
+          delegate: true
+    - name: "Frontend"
+      roles:
+        - name: "Frontend Developer"
+          prompt: Focus on UI components
+          model: "gpt-5"
+          delegate: true
+  join:
+    name: "Integration Reviewer"
+    prompt: Review and integrate both outputs
   ```
-
-  ### With Specific Model
-  ```yaml
-  orchestration: cli
-  isolation: worktree
-  cliMode: autonomous
-  model: "gpt-5"  # Use GPT-5 for complex reasoning
-  ```
-
-  ### Multiple Specialized Roles
-  ```yaml
-  roles:
-    - name: "Backend Developer"
-      prompt: |
-        Focus on server-side implementation
-      model: "claude-sonnet-4.5"
-    - name: "Frontend Developer"
-      prompt: |
-        Focus on UI components
-      model: "gpt-5"
-    - name: "Test Engineer"
-      prompt: |
-        Ensure quality and coverage
-      model: "claude-haiku-4.5"  # Faster for tests
-  ```
-
-  ## Troubleshooting
-
-  ### Worktree Creation Failed
-  - Ensure Git repository is clean
-  - Check for existing worktrees: `git worktree list`
-  - Remove stale worktrees: `git worktree prune`
-
-  ### Session Not Persisting
-  - Verify `~/.copilot/` directory exists
-  - Check file permissions
-  - Ensure sufficient disk space
-
-  ### Agent Stuck or Slow
-  - Check VS Code Output → "GitHub Copilot"
-  - Monitor CPU usage
-  - Consider using faster model (haiku)

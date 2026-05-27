@@ -193,6 +193,25 @@ export const chat = {
 	createChatParticipant: () => ({})
 };
 
+export class Range {
+	constructor(
+		public readonly start: { line: number; character: number },
+		public readonly end: { line: number; character: number }
+	) {}
+}
+
+export class EventEmitter<T> {
+	event: (listener: (e: T) => unknown) => { dispose: () => void } = () => ({ dispose: () => {} });
+	fire(_event: T): void {}
+	dispose(): void {}
+}
+
+export enum ExtensionMode {
+	Production = 1,
+	Development = 2,
+	Test = 3,
+}
+
 /**
  * Mock window namespace
  */
@@ -226,6 +245,9 @@ module.exports = {
 	LanguageModelChatMessage,
 	CancellationTokenSource,
 	Uri,
+	Range,
+	EventEmitter,
+	ExtensionMode,
 	lm,
 	chat,
 	window,

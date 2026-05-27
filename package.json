@@ -156,7 +156,7 @@
     "vitest": "^1.6.1"
   },
   "dependencies": {
-    "@github/copilot": "^0.0.365",
+    "@github/copilot": "^1.0.54",
     "@vscode/prompt-tsx": "^0.4.0-alpha.5",
     "js-yaml": "^4.1.0"
   }

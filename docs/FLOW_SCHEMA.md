@@ -9,7 +9,7 @@ Flow files (`.flow.yaml`) define multi-perspective AI discussions with configura
 ```yaml
 # Required metadata
 name: Flow Name
-orchestration: sequence | cli
+orchestration: sequence | parallel
 roles:
   - name: Role Name
     prompt: |
@@ -32,7 +32,7 @@ name: "Code Review Discussion"
 #### `orchestration` (string)
 How roles should interact. Two modes:
 - `sequence`: Sequential execution via language model API
-- `cli`: SDK/CLI delegation with background agent support
+- `parallel`: Fork-join execution — multiple independent groups run, then a `join` role synthesises their outputs
 
 ```yaml
 orchestration: sequence
@@ -235,28 +235,63 @@ Unresolved skills emit a warning and are silently skipped — they do not cause 
 
 > **IntelliSense**: When editing `*.flow.yaml` files, type `- ` under a `skills:` key to get completion suggestions populated from `vscode.chat.getSkills()`.
 
-### CLI-Specific Properties
+### Parallel-Specific Properties
 
-These properties are **only valid** when `orchestration: cli`:
+These properties are **required** when `orchestration: parallel`:
 
-#### `isolation` (string)
-Where changes are applied:
-- `workspace`: Direct changes to active workspace (default)
-- `worktree`: Isolated Git worktree for safe experimentation
+#### `groups` (array)
+Independent workstreams that execute and converge at the `join` role. Minimum 2 groups. Each group's roles run sequentially within the group, in order.
 
 ```yaml
-orchestration: cli
-isolation: worktree
+orchestration: parallel
+groups:
+  - name: "React Team"
+    isolation: worktree          # optional, group-scoped
+    model: "claude-haiku-4.5"   # optional model override for this group
+    roles:
+      - name: "React Developer"
+        prompt: |
+          Implement the feature using React and hooks.
+  - name: "Vue Team"
+    roles:
+      - name: "Vue Developer"
+        prompt: |
+          Implement the same feature using Vue 3 Composition API.
 ```
 
-#### `cliMode` (string)
-Permission and interaction mode:
-- `supervised`: Interactive approval for tool calls (default)
-- `autonomous`: Auto-execute with minimal confirmation
+Each group supports:
+- `name` (string, required): Display name
+- `roles` (array, required): Roles that execute sequentially within the group (minimum 1)
+- `isolation` (string, optional): `workspace` or `worktree` — where the group's agent applies changes
+- `model` (string, optional): Model override for all roles in this group (role-level takes precedence)
+- `skills` (array, optional): Skills merged with flow-level skills for all roles in this group
+- `contexts` (array, optional): Context files merged with flow-level contexts for all roles in this group
+
+#### `join` (role object)
+The synthesising role that receives all group outputs as labeled context files (`[Group: <name>]`) and produces the final response.
 
 ```yaml
-orchestration: cli
-cliMode: supervised
+join:
+  name: "Lead Architect"
+  prompt: |
+    You receive implementations from two teams.
+    Compare them, identify trade-offs, and recommend which to adopt.
+```
+
+The `join` role is a standard role object and supports all role-level fields (`name`, `prompt`, `agent`, `model`, `skills`, `contexts`).
+
+> **Group failure handling**: If a group's execution fails, the remaining groups continue. The join role receives a failure notice `⚠ Group failed: <error>` in place of that group's output — it can still produce a partial synthesis.
+
+#### `isolation` (string) — group level
+Where a specific group's agent applies changes:
+- `workspace`: Applied directly to the active workspace (default)
+- `worktree`: Applied in an isolated Git worktree for safe experimentation
+
+```yaml
+groups:
+  - name: "Experimental Branch"
+    isolation: worktree
+    roles: ...
 ```
 
 #### `model` (string)
@@ -279,11 +314,6 @@ Agent identifier for specialized behavior.
 orchestration: cli
 customAgent: "code-review"
 ```
-
-Built-in agents:
-- `___vscode_default___`: Default agent
-- `code-review`: Code review specialist
-- `test-writer`: Test generation specialist
 
 ## Complete Examples
 
@@ -342,99 +372,55 @@ roles:
 - **Minor**: Nice-to-have improvements
 ```
 
-### Example 2: CLI Background Agent (Supervised Mode)
+### Example 2: Parallel Fork-Join Bake-off
 
 ```yaml
-name: "Unit Test Generator"
-description: "Autonomous test generation with worktree isolation"
+name: "Framework Bake-off"
+description: "Two teams implement the same feature in different frameworks; a Lead Architect picks the winner"
 category: "software-development"
-orchestration: cli
-isolation: worktree
-cliMode: supervised
+orchestration: parallel
+difficulty: intermediate
 model: "claude-sonnet-4.5"
-customAgent: "test-writer"
-tags: ["testing", "automation", "tdd"]
-difficulty: beginner
-roles:
-  - name: "Test Engineer"
-    prompt: |
-      You are a test automation engineer.
-      Generate comprehensive unit tests for the provided code.
-      
-      Requirements:
-      - Use the project's testing framework
-      - Cover happy paths and edge cases
-      - Include test descriptions and assertions
-      - Follow AAA pattern (Arrange, Act, Assert)
-  - name: "Code Coverage Analyst"
-    prompt: |
-      You are a code coverage specialist.
-      Analyze the generated tests and ensure:
-      - All public methods are tested
-      - Branch coverage is maximized
-      - Edge cases are covered
-      - Suggest additional test cases if needed
+tags: ["parallel", "fork-join", "bake-off"]
 
----
-# rawBody
+groups:
+  - name: "React Team"
+    roles:
+      - name: "React Developer"
+        prompt: |
+          You are an expert React developer.
+          Implement the requested feature using React 18 and hooks.
+          Provide complete, production-ready code with TypeScript types.
+  - name: "Vue Team"
+    roles:
+      - name: "Vue Developer"
+        prompt: |
+          You are an expert Vue 3 developer.
+          Implement the same feature using the Composition API.
+          Provide complete, production-ready code with TypeScript types.
 
-# Test Generation Guidelines
+join:
+  name: "Lead Architect"
+  prompt: |
+    You receive two independent implementations of the same feature:
+    [Group: React Team] and [Group: Vue Team].
 
-## Testing Principles
-- Write tests that are readable and maintainable
-- Each test should test one thing
-- Use descriptive test names
-- Mock external dependencies
+    Compare them on:
+    1. Code clarity and maintainability
+    2. Bundle size implications
+    3. Developer ergonomics
+    4. Testing ease
 
-## Coverage Goals
-- Aim for 80%+ line coverage
-- 70%+ branch coverage
-- 100% coverage for critical paths
+    Recommend which implementation to adopt and why.
+
+sharedContext: |
+  Both implementations must:
+  - Handle loading, error, and empty states
+  - Be accessible (WCAG 2.1 AA)
+  - Include unit test stubs
 ```
 
-### Example 3: CLI Autonomous Mode with Workspace Isolation
-
-```yaml
-name: "Documentation Generator"
-description: "Automatically generate API documentation"
-category: "software-development"
-orchestration: cli
-isolation: workspace
-cliMode: autonomous
-model: "claude-haiku-4.5"
-tags: ["documentation", "api", "automation"]
-difficulty: beginner
-roles:
-  - name: "Technical Writer"
-    prompt: |
-      You are a technical writer specializing in API documentation.
-      Generate clear, comprehensive documentation for code files.
-
-      Include:
-      - Function/method signatures
-      - Parameter descriptions
-      - Return value descriptions
-      - Usage examples
-      - Edge cases and error handling
-
----
-# rawBody
-
-# Documentation Standards
-
-## Format
-- Use JSDoc/TypeDoc format for TypeScript
-- Use docstrings for Python
-- Include @example tags with code snippets
-
-## Style Guide
-- Write in present tense
-- Be concise but complete
-- Include type information
-- Link to related functions
-```
-
-### Example 4: Stage-Based Workflow with Skills and Iteration
+### Example 3: Stage-Based Workflow with Skills and Iteration
 
 ```yaml
 name: "Requirements to Architecture"

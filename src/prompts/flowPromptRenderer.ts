@@ -8,10 +8,13 @@ import { renderPrompt } from '@vscode/prompt-tsx';
 import { ContextFile, FlowRolePrompt } from './flowRolePrompt';
 import { IFlowContext } from '../context/flowContextBuilder';
 import { ILogger } from '../platform/log/common/logService';
+import { BLOCKED_TOOLS } from './flowTools';
 
 export type { ContextFile };
 import { FlowTurn } from '../session/flowConversation';
 import { ToolCallRound, ToolResultMetadata } from './flowTools';
+
+export { BLOCKED_TOOLS };
 
 /**
  * Service for rendering Prompt-TSX components to VS Code language model messages
