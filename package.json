@@ -106,6 +106,54 @@
         "title": "List Available Tools",
         "category": "AI Flow",
         "icon": "$(tools)"
+      },
+      {
+        "command": "feima.copilot-ai-flow.openVisualEditor",
+        "title": "Open Visual Editor",
+        "category": "AI Flow",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "feima.copilot-ai-flow.toggleEditor",
+        "title": "Toggle Editor",
+        "category": "AI Flow",
+        "icon": "$(compare-changes)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "feima.copilot-ai-flow.openVisualEditor",
+        "key": "ctrl+shift+e"
+      },
+      {
+        "command": "feima.copilot-ai-flow.toggleEditor",
+        "key": "ctrl+k e",
+        "when": "resourceExtname =~ /\\.flow\\.ya?ml$/"
+      }
+    ],
+    "languages": [
+      {
+        "id": "yaml",
+        "extensions": [".flow.yaml", ".flow.yml"],
+        "aliases": ["Flow", "flow"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "completionProviders": [
+      {
+        "language": "yaml",
+        "triggerCharacters": ["-", ":", " "],
+        "provideCompletionItems": "feima.copilot-ai-flow.toolsCompletion"
+      },
+      {
+        "language": "yaml",
+        "triggerCharacters": ["-", ":", " "],
+        "provideCompletionItems": "feima.copilot-ai-flow.agentsCompletion"
+      },
+      {
+        "language": "yaml",
+        "triggerCharacters": ["-", ":", " "],
+        "provideCompletionItems": "feima.copilot-ai-flow.promptsCompletion"
       }
     ],
     "yamlValidation": [
@@ -122,7 +170,7 @@
           { "filenamePattern": "*.flow.yaml" },
           { "filenamePattern": "*.flow.yml" }
         ],
-        "priority": "default"
+        "priority": "option"
       }
     ]
   },
