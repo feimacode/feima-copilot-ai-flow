@@ -118,7 +118,8 @@
   },
   "definitions": {
     "skillRef": {
-      "oneOf": [
+      "description": "Reference to a skill - either a name string or an object with a path property.",
+      "anyOf": [
         {
           "type": "string",
           "description": "Bare skill name — resolved via `vscode.chat.getSkills()`, then `.agents/skills/{name}/SKILL.md`, then `.github/skills/{name}/SKILL.md`."
@@ -129,15 +130,16 @@
           "additionalProperties": false,
           "properties": {
             "path": {
-              "type": "string",
-              "description": "Path to a SKILL.md file, relative to this panel file."
+              "type": "string"
             }
-          }
+          },
+          "description": "Path to a SKILL.md file, relative to this panel file."
         }
       ]
     },
     "contextRef": {
-      "oneOf": [
+      "description": "Reference to a context file - either a path string or an object with a path property.",
+      "anyOf": [
         {
           "type": "string",
           "description": "Path to a context file. Resolved first relative to this flow file, then relative to the workspace root. Supports any text format: Markdown, plain text, YAML, etc.",
@@ -149,29 +151,31 @@
           "additionalProperties": false,
           "properties": {
             "path": {
-              "type": "string",
-              "description": "Path to a context file, relative to this flow file."
+              "type": "string"
             }
-          }
+          },
+          "description": "Path to a context file, relative to this flow file."
         }
       ]
     },
     "promptRef": {
-      "oneOf": [
+      "description": "Instructions defining this role's perspective and responsibilities. Can be an inline string, a file path reference, or a filename to search in default Copilot prompt folders.",
+      "anyOf": [
         {
           "type": "string",
           "description": "Inline prompt text defining this role's perspective and responsibilities."
         },
         {
           "type": "object",
-          "required": ["uri"],
+          "required": ["path"],
           "additionalProperties": false,
           "properties": {
-            "uri": {
+            "path": {
               "type": "string",
-              "description": "Absolute URI or file path to a prompt file (e.g. `file:///path/to/prompt.prompt.md` or `/absolute/path/to/prompt.prompt.md`)."
+              "description": "Absolute or relative file path to a prompt file."
             }
-          }
+          },
+          "description": "File path to a prompt file."
         },
         {
           "type": "object",
@@ -179,15 +183,16 @@
           "additionalProperties": false,
           "properties": {
             "name": {
-              "type": "string",
-              "description": "Prompt filename to search in default Copilot prompt folders (`.github/prompts/`, `.vscode/prompts/`, etc.). The `.prompt.md` extension is optional."
+              "type": "string"
             }
-          }
+          },
+          "description": "Prompt filename to search in default Copilot prompt folders."
         }
       ]
     },
     "agentRef": {
-      "oneOf": [
+      "description": "Reference to an agent - either a name string or an object with a path property.",
+      "anyOf": [
         {
           "type": "string",
           "description": "Bare agent name — resolved from `.github/agents/{name}.agent.md` or `.agents/{name}.agent.md`."
@@ -198,10 +203,10 @@
           "additionalProperties": false,
           "properties": {
             "path": {
-              "type": "string",
-              "description": "Path to an agent file, relative to this panel file."
+              "type": "string"
             }
-          }
+          },
+          "description": "Path to an agent file, relative to this panel file."
         }
       ]
     },
@@ -319,6 +324,68 @@
           "description": "Additional context files injected into every role in this stage. Merged with flow-level contexts. Use for stage-specific guidelines or reference material."
         }
       }
+    }
+  },
+  "snippets": {
+    "role-basic": {
+      "prefix": ["role-basic", "role"],
+      "description": "Basic flow with single role",
+      "body": [
+        "name: ${1:My Flow}",
+        "description: ${2:Description of this flow}",
+        "roles:",
+        "  - name: ${3:Role Name}",
+        "    prompt: |",
+        "      ${4:Role prompt here...}",
+        "    model: ${5:gpt-4o}"
+      ]
+    },
+    "stage-iterative": {
+      "prefix": ["stage-iterative", "stage"],
+      "description": "Flow with iterative stages",
+      "body": [
+        "name: ${1:My Flow}",
+        "description: ${2:Description of this flow}",
+        "stages:",
+        "  - name: ${3:Stage Name}",
+        "    iterations: ${4:3}",
+        "    roles:",
+        "      - name: ${5:Role Name}",
+        "        prompt: |",
+        "          ${6:Role prompt here...}",
+        "        model: ${7:gpt-4o}"
+      ]
+    },
+    "group-basic": {
+      "prefix": ["group-basic", "group"],
+      "description": "Flow with parallel groups",
+      "body": [
+        "name: ${1:My Flow}",
+        "description: ${2:Description of this flow}",
+        "groups:",
+        "  - name: ${3:Group Name}",
+        "    roles:",
+        "      - name: ${4:Role Name}",
+        "        prompt: |",
+        "          ${5:Role prompt here...}",
+        "        model: ${6:gpt-4o}",
+        "join:",
+        "  name: ${7:Join Role}",
+        "  prompt: |",
+        "    ${8:Synthesize all group outputs...}",
+        "  model: ${9:gpt-4o}"
+      ]
+    },
+    "join-basic": {
+      "prefix": ["join-basic", "join"],
+      "description": "Join role for parallel flows",
+      "body": [
+        "join:",
+        "  name: ${1:Join Role}",
+        "  prompt: |",
+        "    ${2:Synthesize all group outputs...}",
+        "  model: ${3:gpt-4o}"
+      ]
     }
   }
 }

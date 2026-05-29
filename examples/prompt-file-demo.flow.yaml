@@ -24,11 +24,11 @@ roles:
       name: security-review  # Will search for security-review.prompt.md in default folders
       
   # Prompt file reference by URI (absolute path)
-  - name: URI Prompt Reviewer
+  - name: Path Prompt Reviewer
     prompt:
-      uri: /absolute/path/to/custom-review.prompt.md
+      path: /absolute/path/to/custom-review.prompt.md
     model: claude-sonnet-4.5
 
 sharedContext: |
   This is a demonstration of the prompt file reference feature.
-  All three formats are supported: inline string, filename search, and URI reference.
+  All three formats are supported: inline string, filename search, and path reference.

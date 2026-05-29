@@ -1,0 +1,41 @@
+name: Agent File Demo
+description: Demonstrates agent file reference support - inline, URI, and filename formats
+category: software-development
+subcategory: ai-agents
+difficulty: beginner
+tags:
+  - demo
+  - agent-files
+  - example
+
+
+roles:
+  # Inline prompt (traditional format)
+  - name: Inline Developer
+    prompt: |
+      You are a senior developer.
+      Write clean, maintainable code following best practices.
+
+  # Agent file reference by name (searches in .github/agents/, .agents/, etc.)
+  - name: Named Agent Developer
+    agent: coder  # Will search for coder.agent.md in default folders
+
+  # Agent file reference by path (absolute path)
+  - name: Path Agent Developer
+    agent:
+      path: /absolute/path/to/custom-agent.agent.md
+    model: claude-sonnet-4.5
+
+  # Agent file reference by relative path
+  - name: Relative Agent Developer
+    agent: .github/agents/tester.agent.md
+    delegate: true  # Route via Copilot SDK
+
+sharedContext: |
+  This is a demonstration of the agent file reference feature.
+  All formats are supported:
+  - Inline prompt string (traditional)
+  - Agent name (searches in .github/agents/, .agents/, etc.)
+  - Path reference (absolute or relative path)
+
+  The `delegate: true` flag routes execution via the Copilot SDK instead of VS Code LM API.

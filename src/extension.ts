@@ -8,6 +8,9 @@ import { FlowParticipant } from './flow/flowParticipant';
 import { FlowEditorProvider } from './ui/flowEditorProvider';
 import { registerCommands } from './commands';
 import { SkillCompletionProvider } from './completion/skillCompletionProvider';
+import { ToolsCompletionProvider } from './completion/toolsCompletionProvider';
+import { AgentsCompletionProvider } from './completion/agentsCompletionProvider';
+import { PromptsCompletionProvider } from './completion/promptsCompletionProvider';
 import { LogServiceImpl } from './platform/log/common/logService';
 import { VSCodeLogTarget, ConsoleLogTarget } from './platform/log/vscode/logService';
 import { LogLevel } from './platform/log/common/logService';
@@ -36,13 +39,40 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.languages.registerCompletionItemProvider(
 			SkillCompletionProvider.selector,
-			new SkillCompletionProvider(),
+			new SkillCompletionProvider(logService),
 			...SkillCompletionProvider.triggerCharacters
 		)
 	);
 
+	// Register tool name completions inside *.flow.yaml / *.flow.yml
+	context.subscriptions.push(
+		vscode.languages.registerCompletionItemProvider(
+			ToolsCompletionProvider.selector,
+			new ToolsCompletionProvider(logService),
+			...ToolsCompletionProvider.triggerCharacters
+		)
+	);
+
+	// Register agent file completions inside *.flow.yaml / *.flow.yml
+	context.subscriptions.push(
+		vscode.languages.registerCompletionItemProvider(
+			AgentsCompletionProvider.selector,
+			new AgentsCompletionProvider(logService),
+			...AgentsCompletionProvider.triggerCharacters
+		)
+	);
+
+	// Register prompt file completions inside *.flow.yaml / *.flow.yml
+	context.subscriptions.push(
+		vscode.languages.registerCompletionItemProvider(
+			PromptsCompletionProvider.selector,
+			new PromptsCompletionProvider(logService),
+			...PromptsCompletionProvider.triggerCharacters
+		)
+	);
+
 	// Register all commands
-	registerCommands(context);
+	registerCommands(context, logService);
 
 	logService.info('Copilot AI Flow extension activated successfully');
 }

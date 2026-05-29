@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import type { ILogService } from '../platform/log/common/logService';
 
 /** Shape of a skill entry returned by the proposed `vscode.chat.getSkills()` API. */
 interface ChatSkill {
@@ -42,6 +43,8 @@ export class SkillCompletionProvider implements vscode.CompletionItemProvider {
 	/** Characters that re-trigger the completion list */
 	static readonly triggerCharacters = ['-', ' '];
 
+	constructor(private readonly logService: ILogService) {}
+
 	async provideCompletionItems(
 		document: vscode.TextDocument,
 		position: vscode.Position,
@@ -49,21 +52,32 @@ export class SkillCompletionProvider implements vscode.CompletionItemProvider {
 		_context: vscode.CompletionContext
 	): Promise<vscode.CompletionItem[] | undefined> {
 
+		this.logService.trace('[SkillCompletion] provideCompletionItems called');
+		this.logService.trace(`[SkillCompletion] Document: ${document.fileName}`);
+		this.logService.trace(`[SkillCompletion] Position: ${position.line}:${position.character}`);
+
 		// Only operate inside the YAML frontmatter block
 		if (!this.isInFrontmatter(document, position)) {
+			this.logService.trace('[SkillCompletion] Not in frontmatter, returning undefined');
 			return undefined;
 		}
 
 		// Only trigger on lines that look like a YAML list item under skills:
 		if (!this.isSkillsListItem(document, position)) {
+			this.logService.trace('[SkillCompletion] Not a skills list item, returning undefined');
 			return undefined;
 		}
+
+		this.logService.trace('[SkillCompletion] Skills list item detected, fetching skills...');
 
 		// Fetch all skills known to the platform
 		const skills = await this.getSkills(token);
 		if (!skills || skills.length === 0) {
+			this.logService.trace('[SkillCompletion] No skills found, returning undefined');
 			return undefined;
 		}
+
+		this.logService.trace(`[SkillCompletion] Found ${skills.length} skills: ${skills.map(s => s.name).join(', ')}`);
 
 		// Figure out what the user has already typed so we can replace it
 		const lineText = document.lineAt(position).text;
@@ -141,10 +155,13 @@ export class SkillCompletionProvider implements vscode.CompletionItemProvider {
 			// `vscode.chat.getSkills` is a proposed API — guard against absence
 			const getSkills = (vscode.chat as { getSkills?: (token: vscode.CancellationToken) => Thenable<readonly ChatSkill[]> }).getSkills;
 			if (typeof getSkills !== 'function') {
+				this.logService.trace('[SkillCompletion] vscode.chat.getSkills not available');
 				return [];
 			}
+			this.logService.trace('[SkillCompletion] Calling vscode.chat.getSkills...');
 			return await getSkills.call(vscode.chat, token);
-		} catch {
+		} catch (error) {
+			this.logService.error(`[SkillCompletion] Error fetching skills: ${error}`);
 			return [];
 		}
 	}
