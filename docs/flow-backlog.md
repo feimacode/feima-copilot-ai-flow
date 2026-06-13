@@ -4,43 +4,51 @@ Ranked by: killer demo potential × daily usage frequency × gap vs single-promp
 
 ---
 
-## P1 — Build First
+## P1 — Build First ✓ IMPLEMENTED
+
+**Status**: All 6 P1 flows implemented in `examples/` directory. See flow files for usage.
 
 These are the flows that will drive adoption. High frequency, large gap over single-prompt, broad audience, demonstrable in a short video.
 
-### 1. Code Review
+### 1. Code Review ✓
+**Flow file**: `examples/code-review.flow.yaml`
 **Roles (sequence):** Reviewer — Logic & Correctness → Reviewer — Style & Security → Verdict  
 **Gap:** A generalist model doing code review conflates style with correctness and rarely escalates security findings separately. Three focused lenses produce a cleaner, actionable review.  
 **Audience:** Every developer, every day.  
 **Demo hook:** Run it on a real PR diff. The security reviewer catches something the other two miss.
 
-### 2. Scrum Story Estimation
+### 2. Scrum Story Estimation ✓
+**Flow file**: `examples/story-estimation.flow.yaml`
 **Roles (sequence):** Complexity Analyst → Risk & Unknowns Identifier → Dependency Mapper → Estimator + Splitter  
 **Gap:** Single-prompt estimation is anchoring-prone and skips unknowns. The Dependency Mapper role is the differentiator — it surfaces blockers that nobody asks about explicitly.  
 **Audience:** Any team running sprints.  
 **Demo hook:** Feed it a vague story. The Dependency Mapper asks questions that reveal it should be two stories.
 
-### 3. Backlog Ranking
+### 3. Backlog Ranking ✓
+**Flow file**: `examples/backlog-ranking.flow.yaml`
 **Roles (sequence):** Business Value Analyst → Technical Risk & Debt Analyst → Dependency Mapper → Effort/Impact Ranker → Synthesizer  
 **Gap:** Single-prompt ranking collapses everything into one dimension (usually "most impactful") and systematically underweights dependencies and technical debt. The Dependency Mapper role is the differentiator — a boring infrastructure story that unblocks three others ranks higher than a high-value story that can't start yet. The Synthesizer produces a numbered list with a one-line rationale per item, which is the artifact that makes grooming meetings shorter.  
 **Pairs with:** Story Estimation (P1-2). Estimation sizes individual items; Ranking orders the set. The two flows together cover the full sprint planning loop.  
 **Audience:** Any team running sprints.  
 **Demo hook:** Feed it a mixed backlog of 8 stories. The Dependency Mapper reorders the obvious top pick to #4 because three prerequisite tasks were buried in the list.
 
-### 4. War-Room Triage
+### 4. War-Room Triage ✓
+**Flow file**: `examples/war-room-triage.flow.yaml`
 **Roles (staged):** Stage 1 — Incident Commander, Recent Changes Analyst, Application Layer, Infrastructure Layer, Data Layer → Stage 2 — Customer Communication  
 **Gap:** In real incidents the HiPPO effect dominates; everyone investigates the most senior person's hypothesis. Independent parallel analysis produces a ranked differential diagnosis before the arguing starts. The Recent Changes Analyst role is the standout — nobody does this systematically under pressure.  
 **Audience:** Any team running production services. High-stakes, high-sharability.  
 **Demo hook:** Paste an ambiguous alert + logs. The Recent Changes Analyst identifies a deployment from 3 hours ago that the other roles then confirm as the cause.  
 **Design note:** Role prompts must explicitly ask for the right evidence (slow query log, change log, pod restarts) — this doubles as an incident checklist.
 
-### 5. PR Description Generator
+### 5. PR Description Generator ✓
+**Flow file**: `examples/pr-description.flow.yaml`
 **Roles (sequence):** Code Historian (what changed and why) → Impact Assessor (what can break, who's affected) → PR Writer (composes the description)  
 **Gap:** Developers write PR descriptions under time pressure and omit context that reviewers need. The Code Historian role reads the diff with intent-first framing, not change-first.  
 **Audience:** Every developer, every PR.  
 **Demo hook:** Feed it a large refactor diff. The Impact Assessor flags a subtle breaking change the author missed.
 
-### 6. Test Writing
+### 6. Test Writing ✓
+**Flow file**: `examples/test-writing.flow.yaml`
 **Roles (sequence):** Test Designer (identifies cases, edge cases, failure modes) → Test Writer (implements) → Edge Case Hunter (challenges coverage, proposes adversarial inputs)  
 **Gap:** Single-prompt test generation produces happy-path tests with one or two edge cases. The Edge Case Hunter as a separate adversarial role consistently produces tests the first pass misses.  
 **Audience:** Every developer.  
