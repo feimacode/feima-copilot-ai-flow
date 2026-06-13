@@ -4,7 +4,7 @@ import starlight from '@astrojs/starlight';
 // https://starlight.astro.build/
 export default defineConfig({
 	site: 'https://feimacode.github.io',
-	base: '/copilot-ai-flow',
+	base: '/feima-copilot-ai-flow',
 	integrations: [
 		starlight({
 			title: 'Copilot AI Flow',
@@ -13,10 +13,10 @@ export default defineConfig({
 				src: './src/assets/logo.svg',
 			},
 			social: {
-				github: 'https://github.com/feimacode/copilot-ai-flow',
+				github: 'https://github.com/feimacode/feima-copilot-ai-flow',
 			},
 			editLink: {
-				baseUrl: 'https://github.com/feimacode/copilot-ai-flow/edit/main/docs-site/',
+				baseUrl: 'https://github.com/feimacode/feima-copilot-ai-flow/edit/main/docs-site/',
 			},
 			sidebar: [
 				{
