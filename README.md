@@ -182,6 +182,22 @@ docs-site/                  # User-facing documentation site (Astro + Starlight)
 - **Vitest** for unit testing
 - **ESBuild** for webview bundling
 
+### Documentation Site
+
+A user-facing documentation site is available in `docs-site/`:
+
+```bash
+cd docs-site
+npm install
+npm run dev      # Local development server at http://localhost:4321
+npm run build    # Build static site to docs-site/dist/
+npm run preview  # Preview built site locally
+```
+
+**Deployment**: The site automatically deploys to GitHub Pages via the `.github/workflows/docs-deploy.yml` workflow on pushes to `main` that affect `docs-site/`.
+
+**Content**: Tutorials, guides, and reference documentation for users. Engine-internal docs remain in `src/docs/` for contributors.
+
 ### Coding Conventions
 
 - `PascalCase` for types/classes/enums; `camelCase` for functions, methods, variables
