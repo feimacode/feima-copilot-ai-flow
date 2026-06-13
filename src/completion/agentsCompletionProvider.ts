@@ -205,7 +205,6 @@ export class AgentsCompletionProvider implements vscode.CompletionItemProvider {
 		for (const folder of workspaceFolders) {
 			for (const agentDir of AgentsCompletionProvider.AGENT_DIRS) {
 				this.logService.trace(`[AgentsCompletion] Scanning directory: ${path.join(folder.uri.fsPath, agentDir)}`);
-				const dirPath = path.join(folder.uri.fsPath, agentDir);
 
 				try {
 					const files = await vscode.workspace.findFiles(

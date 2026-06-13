@@ -195,7 +195,7 @@ describe('FlowEngine.executeForkJoin() — group execution and join', () => {
 		vi.spyOn(eng, 'buildAugmentedSystemPrompt').mockResolvedValue('sys');
 		vi.spyOn(eng, 'resolveContextFiles').mockResolvedValue([]);
 		vi.spyOn(eng, 'resolveReferenceFiles').mockResolvedValue([]);
-		vi.spyOn(eng, 'getFlowTools').mockReturnValue({ tools: [], missingTools: [] });
+		vi.spyOn(eng, 'getFlowTools').mockReturnValue({ tools: [], missingTools: [], blockedTools: [] } as ReturnType<typeof eng.getFlowTools>);
 
 		const config = makeConfig({
 			groups: [
@@ -245,7 +245,7 @@ describe('FlowEngine.executeForkJoin() — group execution and join', () => {
 		vi.spyOn(eng, 'buildAugmentedSystemPrompt').mockResolvedValue('sys');
 		vi.spyOn(eng, 'resolveContextFiles').mockResolvedValue([]);
 		vi.spyOn(eng, 'resolveReferenceFiles').mockResolvedValue([]);
-		vi.spyOn(eng, 'getFlowTools').mockReturnValue({ tools: [], missingTools: [] });
+		vi.spyOn(eng, 'getFlowTools').mockReturnValue({ tools: [], missingTools: [], blockedTools: [] } as ReturnType<typeof eng.getFlowTools>);
 
 		const config = makeConfig({
 			groups: [

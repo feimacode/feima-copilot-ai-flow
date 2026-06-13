@@ -128,3 +128,44 @@ roles:
 
       ### Additional Test Recommendations
       [Specific tests to add for comprehensive coverage]
+
+sharedContext: |
+  # Test Writing Flow
+
+  This flow generates **comprehensive tests with adversarial coverage hunting**.
+  Three specialized roles produce tests that a single generalist prompt would miss.
+
+  ## When to Use
+
+  - Writing tests for new features or bug fixes
+  - Improving test coverage on existing code
+  - Refactoring that needs safety-net tests
+  - Before merging complex changes
+  - When you want adversarial review of your test suite
+
+  ## How It Works
+
+  1. **Test Designer** identifies test cases, edge cases, error conditions, and integration points
+  2. **Test Writer** implements the tests using your project's testing framework and conventions
+  3. **Edge Case Hunter** challenges coverage with adversarial inputs, stress scenarios, and regression risks
+
+  ## Example
+
+  ```
+  @flow #file:test-writing.flow.yaml
+
+  Write tests for the payment processing module in src/billing/payments.ts
+  ```
+
+  ## What You'll Get
+
+  A comprehensive test suite: happy path tests, edge case tests (boundaries, limits, extremes),
+  error condition tests, and adversarial input tests. The Edge Case Hunter catches gaps the
+  initial implementation misses — consistently producing better coverage than single-pass generation.
+
+  ## Customize It
+
+  - Add your project's test framework and conventions to the Test Writer's prompt
+  - Include a `contexts:` file with your team's testing standards and coverage thresholds
+  - Adjust the Test Designer's coverage priorities to match your risk profile
+  - Add `copilot_createFile` and `copilot_replaceString` to tools for writing test files directly

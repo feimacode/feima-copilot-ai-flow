@@ -18,5 +18,6 @@ export interface IFlowEntryMessage {
 	difficulty?: string;
 	version?: string;
 	author?: string;
+	tutorialUrl?: string;
 	source: 'builtin';
 }

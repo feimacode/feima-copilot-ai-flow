@@ -195,3 +195,52 @@ roles:
 
       ### Items for Backlog Review
       [Low-value items to reconsider or remove]
+
+sharedContext: |
+  # Backlog Ranking Flow
+
+  This flow provides **multi-dimension backlog prioritization** with five
+  specialized roles that produce a dependency-aware ranked list with rationale.
+
+  ## When to Use
+
+  - Sprint planning and backlog grooming sessions
+  - When you have more items than capacity and need to decide what to build first
+  - When dependencies between items create hidden ordering constraints
+  - For quarterly or project roadmap prioritization
+  - When stakeholders disagree on what matters most
+
+  ## How It Works
+
+  1. **Business Value Analyst** scores each item on user impact, revenue, strategic alignment, and urgency
+  2. **Technical Risk & Debt Analyst** assesses technical debt, security, performance, and maintenance risks
+  3. **Dependency Mapper** identifies prerequisite relationships and finds items that unblock many others
+  4. **Effort/Impact Ranker** computes ROI ratios and identifies quick wins vs. major investments
+  5. **Synthesizer** combines all analyses into a final ranked list with rationale and sprint allocation
+
+  ## Example
+
+  ```
+  @flow #file:backlog-ranking.flow.yaml
+
+  Here's our backlog:
+  - Add user authentication
+  - Fix payment gateway timeout
+  - Refactor database connection pool
+  - Add dark mode support
+  - Implement rate limiting
+  - Update onboarding flow
+  ```
+
+  ## What You'll Get
+
+  A prioritized backlog table with one-line rationale per item, dependency constraints
+  honored (blocked items after blockers), quick wins highlighted, and a recommended
+  sprint allocation across the next 3 sprints.
+
+  ## Customize It
+
+  - Modify the business value dimensions to match your team's scoring criteria
+  - Add role-specific `contexts:` files pointing to your tech radar or engineering strategy
+  - Pair with **Story Estimation** (`story-estimation.flow.yaml`) for a full sprint planning loop: estimation sizes items, ranking orders them
+  - Adjust the Synthesizer's weighting to favor your team's priorities (e.g., debt reduction over feature velocity)

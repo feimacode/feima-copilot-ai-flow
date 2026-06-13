@@ -15,6 +15,8 @@ interface FlowCardProps {
 	previewYaml?: string;
 	onInstall: () => void;
 	onTogglePreview: () => void;
+	onQuickRun: () => void;
+	onOpenTutorial: () => void;
 }
 
 const DIFFICULTY_CLASS: Record<string, string> = {
@@ -31,6 +33,8 @@ export function FlowCard({
 	previewYaml,
 	onInstall,
 	onTogglePreview,
+	onQuickRun,
+	onOpenTutorial,
 }: FlowCardProps) {
 	const installLabel =
 		installState === 'pending' ? '…' :
@@ -38,12 +42,31 @@ export function FlowCard({
 		installState === 'error'   ? '✕ Error' :
 		'Install';
 
+	const isInstalled = installState === 'done';
+	const quickRunCommand = `@flow #file:${flow.id}.flow.yaml`;
+
 	return (
 		<div className={`flow-card ${expanded ? 'flow-card--expanded' : ''}`}>
 			{/* Header row */}
 			<div className="card-header">
 				<span className="card-title" title={flow.name}>{flow.name}</span>
 				<div className="card-actions">
+					{flow.tutorialUrl && (
+						<button
+							className="btn-tutorial"
+							onClick={onOpenTutorial}
+							title="Open tutorial"
+						>
+							📖
+						</button>
+					)}
+					<button
+						className={`btn-quickrun ${isInstalled ? '' : 'btn-quickrun--install'}`}
+						onClick={onQuickRun}
+						title={isInstalled ? `Copy: ${quickRunCommand}` : 'Install first'}
+					>
+						{isInstalled ? '▶ Run' : '↓ Install'}
+					</button>
 					<button
 						className="btn-preview"
 						onClick={onTogglePreview}

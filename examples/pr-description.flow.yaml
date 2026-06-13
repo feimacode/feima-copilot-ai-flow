@@ -129,3 +129,43 @@ roles:
 
       ---
       [Complete markdown-formatted description ready for use]
+
+sharedContext: |
+  # PR Description Generator
+
+  This flow generates **comprehensive, intent-first PR descriptions** from diff
+  analysis. Three specialized roles ensure reviewers get the context they need.
+
+  ## When to Use
+
+  - Every pull request — replace manual description writing
+  - Large refactors where intent is hard to communicate
+  - Multi-file changes that span different concerns
+  - When you want to catch breaking changes before reviewers do
+
+  ## How It Works
+
+  1. **Code Historian** analyzes what changed and why — intent-first, not change-first
+  2. **Impact Assessor** identifies breaking changes, affected stakeholders, and migration needs
+  3. **PR Writer** composes a structured description with title, summary, changes, testing notes, and breaking changes
+
+  ## Example
+
+  ```
+  @flow #file:pr-description.flow.yaml
+
+  Review the changes in this branch and generate a PR description.
+  ```
+
+  ## What You'll Get
+
+  A complete PR description in markdown format: clear title, 2-3 paragraph summary,
+  organized changes list, testing instructions, breaking changes section, and
+  screenshots placeholder. Ready to paste into GitHub, GitLab, or Azure DevOps.
+
+  ## Customize It
+
+  - Add your team's PR template sections to the PR Writer's output format
+  - Add `copilot_findTextInFiles` to tools for cross-referencing related code
+  - Include a `contexts:` file with your team's PR conventions and labeling guidelines
+  - Modify the Impact Assessor to check against your specific API compatibility rules

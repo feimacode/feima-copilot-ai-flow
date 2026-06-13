@@ -27,6 +27,7 @@ src/
     flowRolePrompt.tsx       # Prompt-TSX component: renders the full prompt for a role
     flowPromptRenderer.ts   # Wraps renderPrompt(); returns LanguageModelChatMessage[]
     flowTools.tsx           # Tool-call round TSX elements
+    flowAuthoringSkill.tsx  # Prompt-TSX skill for @flow create / @flow enhance
   context/
     flowContextBuilder.ts   # Builds IFlowContext from a ChatRequest
   session/
@@ -143,7 +144,7 @@ sharedContext: string      # inline text prepended to every role's context
 
 > **Key distinction**: `agent:` controls the *content source* (where the system prompt comes from); `delegate:` controls the *execution path* (which runtime handles the call).
 
-For full documentation see [docs/FLOW_PRIMITIVES.md](docs/FLOW_PRIMITIVES.md).
+For full documentation see [src/docs/FLOW_PRIMITIVES.md](src/docs/FLOW_PRIMITIVES.md).
 
 ---
 
@@ -187,6 +188,75 @@ ContextFile       // { label: string; content: string }
 1. Create `src/flow/library/<id>.flow.yaml` (or register it in `FlowLibrary`).
 2. Add the entry to the library manifest with `id`, `name`, `description`, `category`, `tags`, `difficulty`.
 3. Run `npm run compile` to verify no schema violations.
+
+---
+
+## `@flow create` & `@flow enhance` — Natural Language Flow Authoring
+
+### `@flow create`
+
+Generates a valid `.flow.yaml` from a natural language description by invoking a Prompt-TSX skill (`FlowAuthoringSkill`) through the LM API.
+
+```
+@flow /create a code review with separate security and style lenses
+```
+
+**Pipeline:**
+```
+handleCreate()
+  → _generateFlowYaml()
+      → renderPrompt(FlowAuthoringSkill, { description })
+      → vscode.lm.selectChatModels()
+      → model.sendRequest()
+      → _extractYamlBlock()          # strip markdown fences, find raw YAML
+      → _validateFlowYaml()          # check name + structure keys present
+  → _writeFlowToWorkspace()          # write to .github/flows/<name>.flow.yaml
+```
+
+**Generated flows include:**
+- Valid structural pattern (roles/stages/groups)
+- 2-5 roles with distinct perspectives and structured output formats
+- Appropriate tool assignments based on task category
+- `sharedContext` section (What / When / How / Example / What You'll Get / Customize It)
+
+### `@flow enhance`
+
+Modifies an existing `.flow.yaml` by applying a natural language instruction while preserving existing structure.
+
+```
+@flow /enhance story-estimation.flow.yaml --add-jira-integration
+```
+
+**Pipeline:**
+```
+handleEnhance()
+  → locate flow in .github/flows/
+  → read existing content
+  → _enhanceFlowYaml()
+      → renderPrompt(FlowAuthoringSkill, { description: "Enhance this flow..." })
+      → model.sendRequest()
+      → validate output
+  → write back to same file
+```
+
+**Single vs multi-flow handling:**
+- If one `.flow.yaml` exists in `.github/flows/`, it auto-selects
+- If multiple exist, prompts the user to specify which flow to enhance
+- If the first word of the instruction is a `.flow.yaml` filename, it targets that file
+
+### Flow-authoring Skill (`src/prompts/flowAuthoringSkill.tsx`)
+
+A reusable Prompt-TSX component that teaches the LM to generate valid flow YAML. Key design decisions:
+- Outputs plain YAML (the `_extractYamlBlock()` helper strips any markdown fences)
+- Pattern selection: pipeline default, staged only when iteration is described, fork-join only when parallelism is explicit
+- Role granularity: 2-5 for simple, 5-8 for complex descriptions
+- Tool assignment: domain-aware (code review → readFile+findText; testing → +createFile+replaceString; ops → +run_in_terminal)
+- `sharedContext` is mandatory in generated output (if missing from model output, the validator rejects it)
+- The skill instance is constructed per-request (not cached), so `description` is always fresh
+
+### Test Coverage
+
+Unit tests (`src/prompts/flowAuthoringSkill.spec.ts`) cover YAML extraction, validation, and instruction parsing logic without requiring a live LM. Full integration is covered by simulation tests.
 
 ---
 

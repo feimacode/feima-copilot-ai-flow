@@ -252,7 +252,6 @@ export class PromptsCompletionProvider implements vscode.CompletionItemProvider 
 		for (const folder of workspaceFolders) {
 			for (const promptDir of PromptsCompletionProvider.PROMPT_DIRS) {
 				this.logService.trace(`[PromptsCompletion] Scanning directory: ${path.join(folder.uri.fsPath, promptDir)}`);
-				const dirPath = path.join(folder.uri.fsPath, promptDir);
 
 				try {
 					const files = await vscode.workspace.findFiles(

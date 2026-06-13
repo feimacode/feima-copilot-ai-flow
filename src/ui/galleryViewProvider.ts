@@ -66,6 +66,12 @@ export class GalleryViewProvider {
 				case 'createFromTemplate':
 					await vscode.commands.executeCommand('copilot-ai-flow.createFromTemplate');
 					break;
+
+				case 'openUrl':
+					if (msg.url && typeof msg.url === 'string') {
+						vscode.env.openExternal(vscode.Uri.parse(msg.url));
+					}
+					break;
 			}
 		});
 

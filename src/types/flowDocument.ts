@@ -125,6 +125,8 @@ export interface IFlowMetadata {
 	readonly difficulty?: 'beginner' | 'intermediate' | 'advanced';
 	readonly version?: string;
 	readonly author?: string;
+	/** URL to a tutorial or guide for this flow (shown in the gallery). */
+	readonly tutorialUrl?: string;
 }
 
 /**

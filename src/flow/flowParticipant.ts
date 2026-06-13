@@ -4,10 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import * as yaml from 'js-yaml';
 import { FlowEngine } from './flowEngine';
 import { FlowLibrary } from './flowLibrary';
 import { FlowDiscoveryService } from './flowDiscoveryService';
 import { ILogger } from '../platform/log/common/logService';
+import { renderPrompt } from '@vscode/prompt-tsx';
+import { FlowAuthoringSkill } from '../prompts/flowAuthoringSkill';
 
 /**
  * Chat participant that orchestrates flow discussions.
@@ -98,8 +101,12 @@ export class FlowParticipant {
 				return this.handleBrowse(stream, token);
 			case 'install':
 				return this.handleInstall(request.prompt, stream, token);
+			case 'create':
+				return this.handleCreate(request.prompt, stream, token);
+			case 'enhance':
+				return this.handleEnhance(request.prompt, stream, token);
 			default:
-				stream.markdown(`Unknown command \`/${request.command}\`. Available commands: \`/search\`, \`/list\`, \`/browse\`, \`/install\`.`);
+				stream.markdown(`Unknown command \`/${request.command}\`. Available commands: \`/search\`, \`/list\`, \`/browse\`, \`/install\`, \`/create\`, \`/enhance\`.`);
 				return {};
 		}
 	}
@@ -264,5 +271,253 @@ export class FlowParticipant {
 			}
 		}
 		return {};
+	}
+
+	/** `/create <description>` — generate a new .flow.yaml from natural language. */
+	private async handleCreate(
+		prompt: string,
+		stream: vscode.ChatResponseStream,
+		token: vscode.CancellationToken
+	): Promise<vscode.ChatResult> {
+		const description = prompt.trim();
+		if (!description) {
+			stream.markdown('**Usage**: `@flow /create <description>`\n\nDescribe the flow you want in natural language.\n\n**Example**: `@flow /create a code review with separate security and style lenses`');
+			return {};
+		}
+
+		stream.progress('Generating flow...');
+
+		try {
+			const yamlContent = await this._generateFlowYaml(description, token);
+
+			if (!yamlContent) {
+				stream.markdown('❌ Failed to generate a valid flow. Try a more specific description.');
+				return {};
+			}
+
+			const fileName = await this._writeFlowToWorkspace(yamlContent, stream);
+			if (fileName) {
+				stream.markdown(`✅ Flow created: \`${fileName}\`\n\n`);
+				stream.markdown(`Run it with: \`@flow #file:${fileName}\`\n\n`);
+				stream.markdown('💡 **Next steps**:\n- Run the flow to see it in action\n- Edit the YAML to customize roles and prompts\n- Use `@flow /enhance` to add tools, stages, or integrations');
+			}
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			stream.markdown(`❌ **Error**: ${msg}`);
+		}
+
+		return {};
+	}
+
+	/** `/enhance <instruction>` — enhance an existing flow from a natural language instruction. */
+	private async handleEnhance(
+		input: string,
+		stream: vscode.ChatResponseStream,
+		token: vscode.CancellationToken
+	): Promise<vscode.ChatResult> {
+		const trimmed = input.trim();
+		if (!trimmed) {
+			stream.markdown('**Usage**: `@flow /enhance <instruction>`\n\nAdd features to the active flow.\n\n**Example**: `@flow /enhance --add-jira-integration`');
+			return {};
+		}
+
+		stream.progress('Enhancing flow...');
+
+		try {
+			const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+			if (!workspaceFolder) {
+				stream.markdown('❌ No workspace folder is open.');
+				return {};
+			}
+
+			const flowsDir = vscode.Uri.joinPath(workspaceFolder.uri, '.github', 'flows');
+			let flowFiles: [string, vscode.Uri][] = [];
+			try {
+				const entries = await vscode.workspace.fs.readDirectory(flowsDir);
+				flowFiles = entries
+					.filter(([name]) => name.endsWith('.flow.yaml'))
+					.map(([name]) => [name, vscode.Uri.joinPath(flowsDir, name)] as [string, vscode.Uri]);
+			} catch {
+				stream.markdown('❌ No flows found in `.github/flows/`. Use `@flow /install` or `@flow /create` first.');
+				return {};
+			}
+
+			// If no explicit file specified, use the first .flow.yaml found
+			let targetUri: vscode.Uri;
+			let targetName: string;
+			const words = trimmed.split(/\s+/);
+			const firstWord = words[0];
+
+			if (firstWord.endsWith('.flow.yaml') || firstWord.endsWith('.flow.yml')) {
+				targetName = firstWord;
+				const match = flowFiles.find(([name]) => name === firstWord);
+				if (match) {
+					targetUri = match[1];
+				} else {
+					targetUri = vscode.Uri.joinPath(flowsDir, firstWord);
+				}
+			} else if (flowFiles.length === 1) {
+				targetName = flowFiles[0][0];
+				targetUri = flowFiles[0][1];
+			} else {
+				stream.markdown(`❌ Multiple flows found. Specify which flow to enhance:\n\n`);
+				for (const [name] of flowFiles) {
+					stream.markdown(`- \`@flow /enhance ${name} ${trimmed}\`\n`);
+				}
+				return {};
+			}
+
+			// Read existing flow
+			let existingContent: string;
+			try {
+				const bytes = await vscode.workspace.fs.readFile(targetUri);
+				existingContent = Buffer.from(bytes).toString('utf8');
+			} catch {
+				stream.markdown(`❌ Flow file \`${targetName}\` not found.`);
+				return {};
+			}
+
+			const enhancedYaml = await this._enhanceFlowYaml(existingContent, trimmed, token);
+			if (!enhancedYaml) {
+				stream.markdown('❌ Failed to enhance the flow. Check the instruction and try again.');
+				return {};
+			}
+
+			await vscode.workspace.fs.writeFile(targetUri, Buffer.from(enhancedYaml, 'utf8'));
+			stream.markdown(`✅ Enhanced \`${targetName}\`\n\n`);
+			stream.markdown(`Run it with: \`@flow #file:${targetName}\``);
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			stream.markdown(`❌ **Error**: ${msg}`);
+		}
+
+		return {};
+	}
+
+	/** Generate YAML from natural language description using Prompt-TSX. */
+	private async _generateFlowYaml(
+		description: string,
+		token: vscode.CancellationToken
+	): Promise<string | undefined> {
+		const { messages } = await renderPrompt(
+			FlowAuthoringSkill,
+			{ description },
+			{ modelMaxPromptTokens: 8192 },
+			undefined as unknown as vscode.LanguageModelChat
+		);
+
+		const models = await vscode.lm.selectChatModels({ vendor: 'copilot' });
+		if (models.length === 0) { return undefined; }
+
+		const response = await models[0].sendRequest(messages, {}, token);
+		let text = '';
+		for await (const chunk of response.stream) {
+			if (chunk instanceof vscode.LanguageModelTextPart) {
+				text += chunk.value;
+			}
+		}
+
+		const yamlContent = this._extractYamlBlock(text);
+		return this._validateFlowYaml(yamlContent);
+	}
+
+	/** Enhance an existing flow using Prompt-TSX. */
+	private async _enhanceFlowYaml(
+		existingContent: string,
+		instruction: string,
+		token: vscode.CancellationToken
+	): Promise<string | undefined> {
+		const description = `Enhance this existing flow YAML:\n\n\`\`\`yaml\n${existingContent}\n\`\`\`\n\nInstruction: ${instruction}`;
+		const { messages } = await renderPrompt(
+			FlowAuthoringSkill,
+			{ description },
+			{ modelMaxPromptTokens: 8192 },
+			undefined as unknown as vscode.LanguageModelChat
+		);
+
+		const models = await vscode.lm.selectChatModels({ vendor: 'copilot' });
+		if (models.length === 0) { return undefined; }
+
+		const response = await models[0].sendRequest(messages, {}, token);
+		let text = '';
+		for await (const chunk of response.stream) {
+			if (chunk instanceof vscode.LanguageModelTextPart) {
+				text += chunk.value;
+			}
+		}
+
+		const yamlContent = this._extractYamlBlock(text);
+		return this._validateFlowYaml(yamlContent);
+	}
+
+	/** Extract YAML from model output (handles markdown fences and raw YAML). */
+	private _extractYamlBlock(text: string): string {
+		// Try markdown code fence first
+		const fenceMatch = text.match(/```ya?ml?\s*\n([\s\S]*?)```/);
+		if (fenceMatch) {
+			return fenceMatch[1].trim();
+		}
+		// Try without language identifier
+		const fenceMatch2 = text.match(/```\s*\n([\s\S]*?)```/);
+		if (fenceMatch2) {
+			return fenceMatch2[1].trim();
+		}
+		// Raw YAML — strip any leading/trailing commentary
+		const lines = text.trim().split('\n');
+		const startIdx = lines.findIndex(l => l.trim().startsWith('name:'));
+		if (startIdx >= 0) {
+			return lines.slice(startIdx).join('\n').trim();
+		}
+		return text.trim();
+	}
+
+	/** Validate YAML against flow schema. Returns valid YAML or undefined. */
+	private _validateFlowYaml(content: string): string | undefined {
+		try {
+			const parsed = yaml.load(content);
+			if (!parsed || typeof parsed !== 'object') {
+				return undefined;
+			}
+			const obj = parsed as Record<string, unknown>;
+			if (!obj.name || typeof obj.name !== 'string') {
+				return undefined;
+			}
+			if (!obj.roles && !obj.stages && !obj.groups) {
+				return undefined;
+			}
+			return content;
+		} catch {
+			return undefined;
+		}
+	}
+
+	/** Write flow YAML to .github/flows/ in the workspace and return relative path. */
+	private async _writeFlowToWorkspace(
+		content: string,
+		stream: vscode.ChatResponseStream
+	): Promise<string | undefined> {
+		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+		if (!workspaceFolder) {
+			stream.markdown('❌ No workspace folder is open. Please open a folder first.');
+			return undefined;
+		}
+
+		const flowsDir = vscode.Uri.joinPath(workspaceFolder.uri, '.github', 'flows');
+		await vscode.workspace.fs.createDirectory(flowsDir);
+
+		// Derive filename from the flow name
+		let fileName: string;
+		try {
+			const parsed = yaml.load(content) as Record<string, unknown> | undefined;
+			const name = parsed?.name ? String(parsed.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : 'generated-flow';
+			fileName = `${name}.flow.yaml`;
+		} catch {
+			fileName = 'generated-flow.flow.yaml';
+		}
+
+		const targetUri = vscode.Uri.joinPath(flowsDir, fileName);
+		await vscode.workspace.fs.writeFile(targetUri, Buffer.from(content, 'utf8'));
+
+		return `.github/flows/${fileName}`;
 	}
 }

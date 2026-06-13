@@ -39,7 +39,7 @@ export class ToolsCompletionProvider implements vscode.CompletionItemProvider {
 	async provideCompletionItems(
 		document: vscode.TextDocument,
 		position: vscode.Position,
-		token: vscode.CancellationToken,
+		_token: vscode.CancellationToken,
 		_context: vscode.CompletionContext
 	): Promise<vscode.CompletionItem[] | undefined> {
 

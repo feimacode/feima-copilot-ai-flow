@@ -12,6 +12,8 @@ const vscode = acquireVsCodeApi();
 
 type InstallState = 'idle' | 'pending' | 'done' | 'error';
 
+const DIFFICULTY_LEVELS = ['beginner', 'intermediate', 'advanced'] as const;
+
 export function App() {
 	const [flows, setFlows] = useState<IFlowEntryMessage[]>([]);
 	const [query, setQuery] = useState('');
@@ -19,6 +21,7 @@ export function App() {
 	const [previewYaml, setPreviewYaml] = useState<string>('');
 	const [installStates, setInstallStates] = useState<Record<string, InstallState>>({});
 	const [installMessages, setInstallMessages] = useState<Record<string, string>>({});
+	const [difficultyFilters, setDifficultyFilters] = useState<Set<string>>(new Set());
 	const searchRef = useRef<HTMLInputElement>(null);
 
 	// ── Wire up extension messages ─────────────────────────────────────────
@@ -48,21 +51,42 @@ export function App() {
 
 	// ── Filtered list ──────────────────────────────────────────────────────
 	const q = query.toLowerCase().trim();
-	const filtered = q
-		? flows.filter(f =>
-			f.name.toLowerCase().includes(q) ||
-			(f.description ?? '').toLowerCase().includes(q) ||
-			(f.category ?? '').toLowerCase().includes(q) ||
-			(f.subcategory ?? '').toLowerCase().includes(q) ||
-			(f.tags ?? []).some(t => t.toLowerCase().includes(q)) ||
-			f.id.toLowerCase().includes(q)
-		)
-		: flows;
+	const filtered = flows.filter(f => {
+		if (difficultyFilters.size > 0) {
+			const diff = (f.difficulty ?? '').toLowerCase();
+			if (!difficultyFilters.has(diff)) {
+				return false;
+			}
+		}
+		if (q) {
+			return f.name.toLowerCase().includes(q) ||
+				(f.description ?? '').toLowerCase().includes(q) ||
+				(f.category ?? '').toLowerCase().includes(q) ||
+				(f.subcategory ?? '').toLowerCase().includes(q) ||
+				(f.tags ?? []).some(t => t.toLowerCase().includes(q)) ||
+				f.id.toLowerCase().includes(q);
+		}
+		return true;
+	});
 
 	// ── Handlers ───────────────────────────────────────────────────────────
 	const handleInstall = (id: string) => {
 		setInstallStates(prev => ({ ...prev, [id]: 'pending' }));
 		vscode.postMessage({ type: 'install', id });
+	};
+
+	const handleQuickRun = (id: string) => {
+		const state = installStates[id] ?? 'idle';
+		if (state === 'done') {
+			const command = `@flow #file:${id}.flow.yaml`;
+			navigator.clipboard.writeText(command).catch(() => {});
+		} else {
+			handleInstall(id);
+		}
+	};
+
+	const handleOpenTutorial = (url: string) => {
+		vscode.postMessage({ type: 'openUrl', url });
 	};
 
 	const handlePreview = (id: string) => {
@@ -74,6 +98,24 @@ export function App() {
 			setPreviewYaml('');
 			vscode.postMessage({ type: 'getPreview', id });
 		}
+	};
+
+	const handleToggleDifficulty = (level: string) => {
+		setDifficultyFilters(prev => {
+			const next = new Set(prev);
+			if (next.has(level)) {
+				next.delete(level);
+			} else {
+				next.add(level);
+			}
+			return next;
+		});
+	};
+
+	const handleClearFilters = () => {
+		setDifficultyFilters(new Set());
+		setQuery('');
+		searchRef.current?.focus();
 	};
 
 	return (
@@ -106,6 +148,24 @@ export function App() {
 				</button>
 			</div>
 
+			{/* Difficulty filter chips */}
+			<div className="filter-chips">
+				{DIFFICULTY_LEVELS.map(level => (
+					<button
+						key={level}
+						className={`filter-chip ${difficultyFilters.has(level) ? 'filter-chip--active' : ''}`}
+						onClick={() => handleToggleDifficulty(level)}
+					>
+						{level.charAt(0).toUpperCase() + level.slice(1)}
+					</button>
+				))}
+				{difficultyFilters.size > 0 && (
+					<button className="filter-chip filter-chip--clear" onClick={handleClearFilters}>
+						Clear filters
+					</button>
+				)}
+			</div>
+
 			<div className="flow-list">
 				{filtered.length === 0 ? (
 					<div className="empty-state">
@@ -122,6 +182,8 @@ export function App() {
 							previewYaml={previewId === f.id ? previewYaml : undefined}
 							onInstall={() => handleInstall(f.id)}
 							onTogglePreview={() => handlePreview(f.id)}
+							onQuickRun={() => handleQuickRun(f.id)}
+							onOpenTutorial={() => { if (f.tutorialUrl) handleOpenTutorial(f.tutorialUrl); }}
 						/>
 					))
 				)}
