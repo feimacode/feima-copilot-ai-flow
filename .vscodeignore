@@ -10,3 +10,11 @@ tsconfig.json
 !examples/**/*.flow.yaml
 IMPLEMENTATION_STATUS.md
 node_modules/**/.bin/**
+docs-site/**
+openspec/**
+.github/**
+build/**
+webview-src/**
+vitest.config.ts
+esbuild.webview.mjs
+AGENTS.md

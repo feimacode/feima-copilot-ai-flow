@@ -4,6 +4,7 @@
   "description": "Multi-perspective AI discussions with configurable expert roles",
   "version": "0.1.0",
   "publisher": "feima",
+  "license": "MIT",
   "icon": "assets/icon.png",
   "engines": {
     "vscode": "^1.85.0",
@@ -27,6 +28,12 @@
     "type": "git",
     "url": "https://github.com/feimacode/feima-copilot-ai-flow"
   },
+  "extensionPack": [
+    "feima.copilot-more-llms"
+  ],
+  "extensionDependencies": [
+    "github.copilot-chat"
+  ],
   "activationEvents": [
     "onLanguageModel:*"
   ],
@@ -134,31 +141,52 @@
     "languages": [
       {
         "id": "yaml",
-        "extensions": [".flow.yaml", ".flow.yml"],
-        "aliases": ["Flow", "flow"],
+        "extensions": [
+          ".flow.yaml",
+          ".flow.yml"
+        ],
+        "aliases": [
+          "Flow",
+          "flow"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
     "completionProviders": [
       {
         "language": "yaml",
-        "triggerCharacters": ["-", ":", " "],
+        "triggerCharacters": [
+          "-",
+          ":",
+          " "
+        ],
         "provideCompletionItems": "feima.copilot-ai-flow.toolsCompletion"
       },
       {
         "language": "yaml",
-        "triggerCharacters": ["-", ":", " "],
+        "triggerCharacters": [
+          "-",
+          ":",
+          " "
+        ],
         "provideCompletionItems": "feima.copilot-ai-flow.agentsCompletion"
       },
       {
         "language": "yaml",
-        "triggerCharacters": ["-", ":", " "],
+        "triggerCharacters": [
+          "-",
+          ":",
+          " "
+        ],
         "provideCompletionItems": "feima.copilot-ai-flow.promptsCompletion"
       }
     ],
     "yamlValidation": [
       {
-        "fileMatch": ["*.flow.yaml", "*.flow.yml"],
+        "fileMatch": [
+          "*.flow.yaml",
+          "*.flow.yml"
+        ],
         "url": "./schemas/flow.schema.json"
       }
     ],
@@ -167,8 +195,12 @@
         "viewType": "feima.copilot-ai-flow.flowEditor",
         "displayName": "Flow Editor",
         "selector": [
-          { "filenamePattern": "*.flow.yaml" },
-          { "filenamePattern": "*.flow.yml" }
+          {
+            "filenamePattern": "*.flow.yaml"
+          },
+          {
+            "filenamePattern": "*.flow.yml"
+          }
         ],
         "priority": "option"
       }
@@ -184,7 +216,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src --ext ts",
-    "package": "vsce package"
+    "package": "vsce package --allow-star-activation --no-dependencies",
+    "build:vsix": "tsx build/build.ts"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
@@ -200,6 +233,7 @@
     "eslint": "^8.56.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
+    "tsx": "^4.22.4",
     "typescript": "^5.3.0",
     "vitest": "^1.6.1"
   },

@@ -198,6 +198,83 @@ npm run preview  # Preview built site locally
 
 **Content**: Tutorials, guides, and reference documentation for users. Engine-internal docs remain in `src/docs/` for contributors.
 
+### Releasing & Publishing
+
+#### Build VSIX locally
+
+```bash
+npm run build:vsix
+```
+
+This compiles the extension, packages a VSIX into `dist/`, generates a SHA-256 checksum, and validates the output. The resulting files:
+
+```
+dist/
+├── feima-copilot-ai-flow-{version}.vsix
+└── feima-copilot-ai-flow-{version}.vsix.sha256
+```
+
+#### Release to GitHub
+
+The release pipeline is **tag-triggered**. To create a new release:
+
+1. Bump the version and update `CHANGELOG.md`:
+
+```bash
+npm version patch  # or minor / major
+```
+
+This updates `package.json`, creates a git tag, and commits. Push with the tag:
+
+```bash
+git push --follow-tags
+```
+
+The `.github/workflows/release.yml` workflow will:
+- Validate the version matches `package.json`
+- Compile and package the VSIX
+- Generate a SHA-256 checksum
+- Create a GitHub Release with the VSIX and checksum attached
+
+You can also trigger the workflow manually via the **Actions → Release → Run workflow** with a version input.
+
+#### Publish to Marketplace
+
+After a GitHub Release exists, publish to the VS Code Marketplace:
+
+1. Go to **Actions → Publish to Marketplace → Run workflow**
+2. Enter the version (e.g., `0.1.0`)
+3. Type `PUBLISH` as the confirmation string
+
+The `.github/workflows/publish-marketplace.yml` workflow will:
+- Verify the GitHub Release and VSIX exist
+- Download the VSIX and verify its checksum
+- Publish to the VS Code Marketplace at `feima.copilot-ai-flow`
+
+**Requires**: A `VSCE_PAT` secret configured in the repository (Azure DevOps personal access token with Marketplace publish scope).
+
+#### End-to-End Flow
+
+```
+git tag vX.Y.Z → git push origin vX.Y.Z
+        │
+        ▼
+  release.yml (auto)
+        │
+        ├─ validate version
+        ├─ compile + package
+        ├─ checksum
+        └─ GitHub Release
+                │
+                │ (manual trigger)
+                ▼
+  publish-marketplace.yml
+        │
+        ├─ download VSIX
+        ├─ verify checksum
+        └─ vsce publish → Marketplace
+```
+
 ### Coding Conventions
 
 - `PascalCase` for types/classes/enums; `camelCase` for functions, methods, variables
