@@ -12,14 +12,14 @@ export function registerCommands(context: vscode.ExtensionContext, logService: I
 	// Browse gallery
 	context.subscriptions.push(
 		vscode.commands.registerCommand('feima.copilot-ai-flow.browse', () => {
-			GalleryViewProvider.open(context);
+			GalleryViewProvider.open(context, logService);
 		})
 	);
 	
 	// Search flows — open the gallery panel (search box is inline in the webview)
 	context.subscriptions.push(
 		vscode.commands.registerCommand('feima.copilot-ai-flow.search', () => {
-			GalleryViewProvider.open(context);
+			GalleryViewProvider.open(context, logService);
 		})
 	);
 	

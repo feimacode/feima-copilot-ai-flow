@@ -89,6 +89,13 @@ jobs:
       - name: Build extension
         run: npm run compile
 
+      - name: Fetch catalog index
+        run: |
+          mkdir -p assets
+          curl -sL --max-time 15 -o assets/index.json \
+            https://raw.githubusercontent.com/feimacode/feima-harness-catalog/main/index.json
+          node scripts/validate-index.js assets/index.json
+
       - name: Package VSIX
         run: |
           VERSION="${{ needs.validate.outputs.version }}"

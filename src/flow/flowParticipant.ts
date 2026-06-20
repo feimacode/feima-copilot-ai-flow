@@ -8,6 +8,7 @@ import * as yaml from 'js-yaml';
 import { FlowEngine } from './flowEngine';
 import { FlowLibrary } from './flowLibrary';
 import { FlowDiscoveryService } from './flowDiscoveryService';
+import { CatalogClient } from './catalogClient';
 import { ILogger } from '../platform/log/common/logService';
 import { renderPrompt } from '@vscode/prompt-tsx';
 import { FlowAuthoringSkill } from '../prompts/flowAuthoringSkill';
@@ -24,8 +25,9 @@ export class FlowParticipant {
 	constructor(private readonly context: vscode.ExtensionContext, log: ILogger) {
 		const engineLog = log.createSubLogger('FlowEngine');
 		const discoveryLog = log.createSubLogger('Discovery');
+		const catalogClient = new CatalogClient(context, log);
 		this.engine = new FlowEngine(engineLog);
-		this.library = new FlowLibrary(context);
+		this.library = new FlowLibrary(context, catalogClient);
 		this.discoveryService = new FlowDiscoveryService(discoveryLog);
 	}
 	
@@ -105,13 +107,17 @@ export class FlowParticipant {
 				return this.handleCreate(request.prompt, stream, token);
 			case 'enhance':
 				return this.handleEnhance(request.prompt, stream, token);
+			case 'refresh':
+				return this.handleRefresh(stream, token);
+			case 'status':
+				return this.handleStatus(stream, token);
 			default:
-				stream.markdown(`Unknown command \`/${request.command}\`. Available commands: \`/search\`, \`/list\`, \`/browse\`, \`/install\`, \`/create\`, \`/enhance\`.`);
+				stream.markdown(`Unknown command \`/${request.command}\`. Available commands: \`/search\`, \`/list\`, \`/browse\`, \`/install\`, \`/create\`, \`/enhance\`, \`/refresh\`, \`/status\`.`);
 				return {};
 		}
 	}
 
-	/** `/search <query>` — filter built-in flows by name / tags / category. */
+	/** `/search <query>` — filter flows by name / tags / category across all sources. */
 	private async handleSearch(
 		query: string,
 		stream: vscode.ChatResponseStream,
@@ -119,27 +125,52 @@ export class FlowParticipant {
 	): Promise<vscode.ChatResult> {
 		const q = query.trim();
 		if (!q) {
-			stream.markdown('**Usage**: `@flow /search <query>`\n\nSearch for flows by name, tag, or category.\n\n**Examples**:\n- `@flow /search openspec`\n- `@flow /search refactoring`\n- `@flow /search sprint`');
+			stream.markdown('**Usage**: `@flow /search <query> [--source builtin|catalog|workspace]`\n\nSearch for flows by name, tag, or category.\n\n**Examples**:\n- `@flow /search openspec`\n- `@flow /search refactoring --source catalog`\n- `@flow /search sprint`');
+			return {};
+		}
+
+		// Parse --source flag
+		let sourceFilter: string | undefined;
+		const sourceMatch = q.match(/--source\s+(\w+)/i);
+		let searchQuery = q;
+		if (sourceMatch) {
+			sourceFilter = sourceMatch[1].toLowerCase();
+			searchQuery = q.replace(sourceMatch[0], '').trim();
+		}
+
+		if (!searchQuery) {
+			stream.markdown('**Usage**: `@flow /search <query>`\n\nPlease provide a search term.');
 			return {};
 		}
 
 		stream.progress('Searching flows...');
-		const results = await this.library.search(q);
+		let results = await this.library.search(searchQuery);
+
+		// Apply source filter
+		if (sourceFilter && ['builtin', 'catalog', 'workspace'].includes(sourceFilter)) {
+			results = results.filter(f => f.source === sourceFilter);
+		}
 
 		if (results.length === 0) {
-			stream.markdown(`No flows found matching **"${q}"**.\n\nTry \`@flow /list\` to see all available flows.`);
+			const sourceHint = sourceFilter ? ` in "${sourceFilter}" source` : '';
+			stream.markdown(`No flows found matching **"${searchQuery}"**${sourceHint}.\n\nTry \`@flow /list\` to see all available flows.`);
 			return {};
 		}
 
-		stream.markdown(`## Search Results for "${q}" (${results.length})\n\n`);
+		stream.markdown(`## Search Results for "${searchQuery}" (${results.length})\n\n`);
 		for (const f of results) {
-			stream.markdown(`### ${f.name}\n`);
+			const sourceLabel = f.source === 'catalog' ? '[catalog]' : f.source === 'workspace' ? '[workspace]' : '[builtin]';
+			stream.markdown(`### ${f.name} ${sourceLabel}\n`);
 			if (f.description) {
 				stream.markdown(`${f.description}\n\n`);
 			}
 			const meta: string[] = [];
+			if (f.provider) { meta.push(`**Provider**: ${f.provider}`); }
+			if (f.trust) { meta.push(`**Trust**: ${f.trust}`); }
 			if (f.category) { meta.push(`**Category**: ${f.category}`); }
 			if (f.difficulty) { meta.push(`**Difficulty**: ${f.difficulty}`); }
+			if (f.orchestration) { meta.push(`**Pattern**: ${f.orchestration}`); }
+			if (f.roleCount !== undefined) { meta.push(`**Roles**: ${f.roleCount}`); }
 			if (f.tags?.length) { meta.push(`**Tags**: ${f.tags.join(', ')}`); }
 			if (meta.length) {
 				stream.markdown(meta.join(' · ') + '\n\n');
@@ -195,7 +226,7 @@ export class FlowParticipant {
 		const all = await this.library.getAll();
 
 		if (all.length === 0) {
-			stream.markdown('No built-in flows found.');
+			stream.markdown('No flows found.');
 			return {};
 		}
 
@@ -206,7 +237,7 @@ export class FlowParticipant {
 			grouped.get(cat)!.push(f);
 		}
 
-		stream.markdown(`# Flow Gallery\n\n${all.length} built-in flows available.\n\n`);
+		stream.markdown(`# Flow Gallery\n\n${all.length} flows available.\n\n`);
 		for (const [category, flows] of grouped) {
 			stream.markdown(`## ${category}\n\n`);
 			for (const f of flows) {
@@ -215,6 +246,32 @@ export class FlowParticipant {
 					stream.markdown(`> ${f.description}\n\n`);
 				}
 				const badges: string[] = [];
+				// Source badge
+				if (f.source === 'catalog') {
+					badges.push(`📦 catalog`);
+				} else if (f.source === 'workspace') {
+					badges.push(`📁 workspace`);
+				} else {
+					badges.push(`🏠 builtin`);
+				}
+				// Trust badge (catalog only)
+				if (f.trust === 'official') {
+					badges.push(`✅ official`);
+				} else if (f.trust === 'community') {
+					badges.push(`👥 community`);
+				}
+				// Provider (catalog only)
+				if (f.provider) {
+					badges.push(`📋 ${f.provider}`);
+				}
+				// Orchestration pattern
+				if (f.orchestration) {
+					badges.push(`🔄 ${f.orchestration}`);
+				}
+				// Role count
+				if (f.roleCount !== undefined) {
+					badges.push(`👤 ${f.roleCount} roles`);
+				}
 				if (f.difficulty) { badges.push(`🎯 ${f.difficulty}`); }
 				if (f.tags?.length) { badges.push(`🏷 ${f.tags.join(', ')}`); }
 				if (f.version) { badges.push(`v${f.version}`); }
@@ -256,20 +313,102 @@ export class FlowParticipant {
 
 		const targetFolder = vscode.Uri.joinPath(workspaceFolder.uri, '.github', 'flows');
 		try {
-			await vscode.workspace.fs.createDirectory(targetFolder);
-			const dest = await this.library.install(entry, targetFolder);
+			const { dest, companions } = await this.library.install(entry, targetFolder);
 			const rel = vscode.workspace.asRelativePath(dest);
 			stream.markdown(`✅ **${entry.name}** installed to \`${rel}\`\n\n`);
 			stream.markdown(`Open the flow: \`@flow #file:./${rel}\`\n\n`);
 			stream.button({ command: 'vscode.open', arguments: [dest], title: 'Open Flow File' });
+
+			// Report companions
+			if (companions) {
+				if (companions.skills.length > 0) {
+					stream.markdown(`\n📦 This flow uses skills: ${companions.skills.map(s => `\`${s}\``).join(', ')}`);
+				}
+				if (companions.prompts.length > 0) {
+					stream.markdown(`\n📦 This flow uses prompts/agents: ${companions.prompts.map(p => `\`${p}\``).join(', ')}`);
+				}
+			}
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
-			if (msg.includes('FileExistsError') || msg.includes('already exists')) {
+			if (msg.includes('already exists') || msg.includes('Installation cancelled')) {
 				stream.markdown(`ℹ️ **${entry.name}** is already installed in \`.github/flows/\`. No changes made.`);
 			} else {
 				stream.markdown(`❌ Install failed: ${msg}`);
 			}
 		}
+		return {};
+	}
+
+	/** `/refresh` — force refresh the catalog from GitHub. */
+	private async handleRefresh(
+		stream: vscode.ChatResponseStream,
+		_token: vscode.CancellationToken
+	): Promise<vscode.ChatResult> {
+		stream.progress('Refreshing catalog from GitHub...');
+		try {
+			const flows = await this.library.refresh(true);
+			const catalogFlows = flows.filter(f => f.source === 'catalog');
+			stream.markdown(`✅ Catalog refreshed successfully.\n\n`);
+			stream.markdown(`- **${catalogFlows.length}** catalog flows available\n`);
+			stream.markdown(`- **${flows.length}** total flows (builtin + catalog + workspace)\n\n`);
+			stream.markdown(`Use \`@flow /browse\` to see all flows.`);
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			stream.markdown(`❌ Refresh failed: ${msg}\n\n`);
+			stream.markdown(`The extension will continue using cached or bundled catalog data.`);
+		}
+		return {};
+	}
+
+	/** `/status` — show catalog health and metadata. */
+	private async handleStatus(
+		stream: vscode.ChatResponseStream,
+		_token: vscode.CancellationToken
+	): Promise<vscode.ChatResult> {
+		stream.progress('Checking catalog status...');
+		const all = await this.library.getAll();
+
+		const builtin = all.filter(f => f.source === 'builtin');
+		const catalog = all.filter(f => f.source === 'catalog');
+		const workspace = all.filter(f => f.source === 'workspace');
+
+		const official = catalog.filter(f => f.trust === 'official');
+		const community = catalog.filter(f => f.trust === 'community');
+
+		const providers = new Set(catalog.map(f => f.provider).filter(Boolean));
+
+		stream.markdown(`# 📊 Flow Catalog Status\n\n`);
+		stream.markdown(`| Source | Count |\n`);
+		stream.markdown(`|--------|-------|\n`);
+		stream.markdown(`| 🏠 Builtin | ${builtin.length} |\n`);
+		stream.markdown(`| 📦 Catalog | ${catalog.length} |\n`);
+		stream.markdown(`| 📁 Workspace | ${workspace.length} |\n`);
+		stream.markdown(`| **Total** | **${all.length}** |\n\n`);
+
+		if (catalog.length > 0) {
+			stream.markdown(`### Catalog Details\n\n`);
+			stream.markdown(`- ✅ Official: ${official.length}\n`);
+			stream.markdown(`- 👥 Community: ${community.length}\n`);
+			stream.markdown(`- 📋 Providers: ${[...providers].join(', ') || 'none'}\n\n`);
+
+			const byOrchestration = new Map<string, number>();
+			for (const f of catalog) {
+				if (f.orchestration) {
+					byOrchestration.set(f.orchestration, (byOrchestration.get(f.orchestration) || 0) + 1);
+				}
+			}
+			if (byOrchestration.size > 0) {
+				stream.markdown(`### Orchestration Patterns\n\n`);
+				for (const [pattern, count] of byOrchestration) {
+					stream.markdown(`- 🔄 ${pattern}: ${count}\n`);
+				}
+				stream.markdown('\n');
+			}
+		}
+
+		stream.markdown(`---\n\n`);
+		stream.markdown(`💡 Use \`@flow /refresh\` to fetch the latest catalog from GitHub.\n`);
+		stream.markdown(`💡 Use \`@flow /browse\` to explore all available flows.`);
 		return {};
 	}
 

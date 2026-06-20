@@ -36,6 +36,50 @@ function compile(): void {
 	console.log('✅ Compilation complete\n');
 }
 
+function fetchCatalogIndex(): void {
+	console.log('📥 Fetching catalog index...');
+
+	const assetsDir = path.join(PROJECT_ROOT, 'assets');
+	fs.mkdirSync(assetsDir, { recursive: true });
+
+	const indexUrl = 'https://raw.githubusercontent.com/feimacode/feima-harness-catalog/main/index.json';
+	const indexPath = path.join(assetsDir, 'index.json');
+
+	try {
+		execSync(`curl -sL --max-time 15 -o "${indexPath}" "${indexUrl}"`, {
+			cwd: PROJECT_ROOT,
+			stdio: 'pipe',
+		});
+
+		if (!fs.existsSync(indexPath) || fs.statSync(indexPath).size === 0) {
+			throw new Error('Downloaded index.json is empty');
+		}
+
+		// Validate the downloaded index
+		execSync(`node scripts/validate-index.js "${indexPath}"`, {
+			cwd: PROJECT_ROOT,
+			stdio: 'inherit',
+		});
+
+		const sizeKB = (fs.statSync(indexPath).size / 1024).toFixed(1);
+		console.log(`✅ Catalog index fetched and validated (${sizeKB} KB)\n`);
+	} catch (err) {
+		console.warn(`⚠️  Failed to fetch catalog index: ${err instanceof Error ? err.message : String(err)}`);
+		console.warn('   The extension will use an empty fallback index.\n');
+
+		// Write an empty index as fallback
+		const emptyIndex = {
+			version: 1,
+			updated: new Date().toISOString(),
+			providers: [],
+			skills: [],
+			prompts: [],
+			flows: [],
+		};
+		fs.writeFileSync(indexPath, JSON.stringify(emptyIndex, null, '\t'));
+	}
+}
+
 function packageVsix(version: string): string {
 	console.log('📦 Packaging VSIX...');
 
@@ -128,7 +172,10 @@ function main(): void {
 	// Step 1: Compile
 	compile();
 
-	// Step 2: Package
+	// Step 2: Fetch catalog index
+	fetchCatalogIndex();
+
+	// Step 3: Package
 	const vsixPath = packageVsix(pkg.version);
 
 	// Step 3: Checksum

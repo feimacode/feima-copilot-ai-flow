@@ -6,6 +6,8 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import { FlowLibrary } from '../flow/flowLibrary';
+import { CatalogClient } from '../flow/catalogClient';
+import { ILogger } from '../platform/log/common/logService';
 
 /**
  * Editor-area WebviewPanel showing a React-based search gallery of built-in flows.
@@ -19,7 +21,7 @@ export class GalleryViewProvider {
 	private static _instance: GalleryViewProvider | undefined;
 
 	/** Open the gallery, or reveal it if already open. */
-	static open(context: vscode.ExtensionContext): void {
+	static open(context: vscode.ExtensionContext, log: ILogger): void {
 		if (GalleryViewProvider._instance) {
 			GalleryViewProvider._instance._panel.reveal();
 			return;
@@ -36,7 +38,7 @@ export class GalleryViewProvider {
 			}
 		);
 
-		GalleryViewProvider._instance = new GalleryViewProvider(context, panel);
+		GalleryViewProvider._instance = new GalleryViewProvider(context, panel, log);
 	}
 
 	private readonly library: FlowLibrary;
@@ -44,8 +46,10 @@ export class GalleryViewProvider {
 	private constructor(
 		private readonly context: vscode.ExtensionContext,
 		private readonly _panel: vscode.WebviewPanel,
+		log: ILogger,
 	) {
-		this.library = new FlowLibrary(context);
+		const catalogClient = new CatalogClient(context, log);
+		this.library = new FlowLibrary(context, catalogClient);
 
 		this._panel.webview.html = this._buildHtml(this._panel.webview);
 
@@ -100,7 +104,7 @@ export class GalleryViewProvider {
 	 */
 	private async _sendPreview(id: string, webview: vscode.Webview): Promise<void> {
 		const entry = await this.library.find(id);
-		if (!entry) {
+		if (!entry || !entry.filePath) {
 			webview.postMessage({ type: 'preview', id, content: '' });
 			return;
 		}
@@ -128,13 +132,12 @@ export class GalleryViewProvider {
 
 		const targetFolder = vscode.Uri.joinPath(workspaceFolder.uri, '.github', 'flows');
 		try {
-			await vscode.workspace.fs.createDirectory(targetFolder);
-			const dest = await this.library.install(entry, targetFolder);
+			const { dest } = await this.library.install(entry, targetFolder);
 			const rel = vscode.workspace.asRelativePath(dest);
 			webview.postMessage({ type: 'installDone', id, success: true, message: `Installed to ${rel}` });
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
-			if (msg.includes('FileExistsError') || msg.includes('already exists') || msg.includes('EntryExists')) {
+			if (msg.includes('already exists') || msg.includes('Installation cancelled')) {
 				webview.postMessage({ type: 'installDone', id, success: true, message: 'Already installed.' });
 			} else {
 				webview.postMessage({ type: 'installDone', id, success: false, message: msg });
