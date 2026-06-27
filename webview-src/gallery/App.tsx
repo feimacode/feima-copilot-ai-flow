@@ -9,6 +9,8 @@ import { FlowCard } from './FlowCard';
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };
 const vscode = acquireVsCodeApi();
+// Store on window so child components (FlowCard, etc.) can use it
+(window as any).vscode = vscode;
 
 type InstallState = 'idle' | 'pending' | 'done' | 'error';
 

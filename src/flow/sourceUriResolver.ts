@@ -35,6 +35,62 @@ export interface IFetchFlowResult {
 
 /** Timeout for fetching flow YAML from remote sources */
 const FETCH_FLOW_TIMEOUT_MS = 15_000; // 15 seconds
+/** Time to cache resolved gist raw URLs (avoid repeated API calls) */
+const GIST_URL_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/** In-memory cache of resolved gist raw URLs: gistId → { url, expires } */
+const _gistUrlCache = new Map<string, { url: string; expires: number }>();
+
+/**
+ * Resolves the raw content URL for a gist by querying the GitHub API.
+ * Returns the complete raw URL (includes owner, commit hash, filename).
+ * Results are cached in memory for 1 hour.
+ */
+async function resolveGistRawUrl(gistId: string): Promise<string> {
+	// Check cache first
+	const cached = _gistUrlCache.get(gistId);
+	if (cached && cached.expires > Date.now()) {
+		return cached.url;
+	}
+
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => controller.abort(), FETCH_FLOW_TIMEOUT_MS);
+
+	try {
+		const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+			signal: controller.signal,
+			headers: { 'Accept': 'application/vnd.github+json' },
+		});
+
+		if (!response.ok) {
+			throw new Error(
+				`Gist ${gistId} not found (HTTP ${response.status} ${response.statusText})`
+			);
+		}
+
+		const gist = await response.json() as { files?: Record<string, { raw_url?: string }> };
+		if (!gist.files || Object.keys(gist.files).length === 0) {
+			throw new Error(`Gist ${gistId} has no files`);
+		}
+
+		// Prefer .flow.yaml, then .yaml, then .yml, then first file
+		const entries = Object.entries(gist.files);
+		const flowFile = entries.find(([name]) => name.endsWith('.flow.yaml'))
+			?? entries.find(([name]) => name.endsWith('.yaml'))
+			?? entries.find(([name]) => name.endsWith('.yml'))
+			?? entries[0];
+
+		const rawUrl = flowFile[1]?.raw_url;
+		if (!rawUrl) {
+			throw new Error(`Gist ${gistId} has no downloadable files`);
+		}
+
+		_gistUrlCache.set(gistId, { url: rawUrl, expires: Date.now() + GIST_URL_CACHE_TTL_MS });
+		return rawUrl;
+	} finally {
+		clearTimeout(timeoutId);
+	}
+}
 
 /**
  * Resolves a catalog source URI to a raw content URL.
@@ -134,7 +190,25 @@ function resolveGithubUri(repoPath: string, original: string): IResolvedSource {
  * @throws If the URI is invalid, the fetch fails, or the content is not valid YAML
  */
 export async function fetchFlow(sourceUri: string): Promise<IFetchFlowResult> {
-	const resolved = resolveSourceUri(sourceUri);
+	const colonIndex = sourceUri.indexOf(':');
+	const scheme = colonIndex > -1 ? sourceUri.substring(0, colonIndex) as SourceUriScheme : '';
+	const value = colonIndex > -1 ? sourceUri.substring(colonIndex + 1) : '';
+
+	if (!scheme || !value) {
+		throw new Error(`Invalid source URI: "${sourceUri}". Expected format: "scheme:value"`);
+	}
+
+	let url: string;
+	let resolved: IResolvedSource;
+
+	if (scheme === 'gist') {
+		// Resolve through GitHub API to get the correct raw URL (owner/commit/filename)
+		url = await resolveGistRawUrl(value);
+		resolved = { url, scheme: 'gist', original: sourceUri };
+	} else {
+		resolved = resolveSourceUri(sourceUri);
+		url = resolved.url;
+	}
 
 	// Create an AbortController for timeout
 	const controller = new AbortController();

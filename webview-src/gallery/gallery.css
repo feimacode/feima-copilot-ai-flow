@@ -88,6 +88,10 @@ body {
 .flow-list {
   flex: 1;
   overflow-y: auto;
+  display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+    padding: 12px;
 }
 
 .empty-state {
@@ -99,14 +103,18 @@ body {
 
 /* ── Flow card ─────────────────────────────────────────────────────────────── */
 .flow-card {
-  padding: 7px 10px;
-  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, rgba(255,255,255,0.06));
+  padding: 10px;
+    border: 1px solid var(--vscode-sideBarSectionHeader-border, rgba(255, 255, 255, 0.06));
+    border-radius: 4px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  transition: background 0.1s;
+  gap: 6px;
+    transition: background 0.1s, border-color 0.1s;
 }
-.flow-card:hover { background: var(--vscode-list-hoverBackground); }
+.flow-card:hover {
+  background: var(--vscode-list-hoverBackground);
+  border-color: var(--vscode-sideBarSectionHeader-border, rgba(255, 255, 255, 0.12));
+}
 .flow-card--expanded { background: var(--vscode-list-activeSelectionBackground, rgba(255,255,255,0.05)); }
 
 .card-header {
@@ -163,9 +171,71 @@ body {
 .badge-advanced     { background: #6b1a1a; color: #ffd4d4; }
 
 /* ── Preview / expand area ─────────────────────────────────────────────────── */
-.card-preview {
-  margin-top: 4px;
+.preview-section {
+  margin-top: 6px;
+  border-radius: 4px;
+  overflow: hidden;
 }
+
+.preview-section--compact {
+  margin-top: 0;
+  position: relative;
+}
+
+.preview-section--compact:hover .btn-preview-overlay {
+  opacity: 1;
+}
+
+.btn-preview-overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  z-index: 10;
+}
+
+.btn-preview-overlay:hover {
+  opacity: 1;
+  background: var(--vscode-button-hoverBackground);
+}
+
+.preview-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 40px;
+}
+
+.preview-overlay-content {
+  background: var(--vscode-editor-background);
+  border-radius: 8px;
+  width: 80vw;
+  height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
 .preview-loading {
   height: 60px;
   display: flex;
@@ -175,6 +245,58 @@ body {
   color: var(--vscode-descriptionForeground);
 }
 
+/* ── Title row ────────────────────────────────────────────────────────────── */
+.card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.card-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Metadata row ─────────────────────────────────────────────────────────── */
+.card-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.metadata-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0.8;
+}
+
+/* ── Actions row ──────────────────────────────────────────────────────────── */
+.card-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* ── Install error message ──────────────────────────────────────────────────── */
+.card-error-message {
+  margin-top: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--vscode-errorForeground);
+  background: var(--vscode-inputValidation-errorBackground);
+  border: 1px solid var(--vscode-inputValidation-errorBorder);
+  border-radius: 3px;
+  word-break: break-word;
+}
 /* ── Buttons ────────────────────────────────────────────────────────────────── */
 .btn-preview {
   background: none;
@@ -187,6 +309,309 @@ body {
 }
 .btn-preview:hover { background: var(--vscode-toolbar-hoverBackground); color: var(--vscode-foreground); }
 
+.btn-icon {
+  background: none;
+  border: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 14px;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+  color: var(--vscode-foreground);
+}
+
+.btn-star {
+  background: none;
+  border: none;
+  color: #d4a017;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 11px;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.btn-star:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+.btn-star--disabled {
+  color: var(--vscode-descriptionForeground);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.btn-star--disabled:hover {
+  background: none;
+}
+
+.btn-primary {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: var(--vscode-font-family);
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.btn-primary:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.btn-primary--install {
+  background: #1a6b1a;
+  color: #d4ffd4;
+}
+
+.btn-secondary {
+  padding: 4px 8px;
+  font-size: 11px;
+  font-family: var(--vscode-font-family);
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid var(--vscode-button-border);
+  border-radius: 2px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.btn-secondary:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.btn-secondary--pending {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.btn-secondary--done {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-secondary--error {
+  background: #6b1a1a;
+  color: #ffd4d4;
+}
+
+.btn-ghost {
+  padding: 4px 8px;
+  font-size: 11px;
+  font-family: var(--vscode-font-family);
+  background: none;
+  color: var(--vscode-descriptionForeground);
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.btn-ghost:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+  color: var(--vscode-foreground);
+}
+
+/* ── More menu ────────────────────────────────────────────────────────────── */
+.more-menu-container {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.more-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 100;
+  min-width: 180px;
+  background: var(--vscode-dropdown-background, var(--vscode-menu-background));
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-menu-border));
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.more-menu button {
+  background: none;
+  border: none;
+  color: var(--vscode-dropdown-foreground, var(--vscode-menu-foreground));
+  cursor: pointer;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-family: var(--vscode-font-family);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.more-menu button:hover {
+  background: var(--vscode-dropdown-selectionBackground, var(--vscode-menu-selectionBackground));
+  color: var(--vscode-dropdown-selectionForeground, var(--vscode-menu-selectionForeground));
+}
+
+/* ── Enlarged section ─────────────────────────────────────────────────────── */
+.enlarged-section {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.enlarged-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.3));
+}
+
+.enlarged-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.enlarged-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Enlarged preview fills available space */
+.preview-section--enlarged {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Use absolute positioning so ReactFlow gets a concrete pixel height */
+.preview-section--enlarged>div {
+  position: absolute;
+  inset: 0;
+}
+
+/* ── Filter Chips ────────────────────────────────────────────────────────── */
+.filter-chips {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.3));
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  padding: 4px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--vscode-button-secondaryBorder, transparent);
+  background: var(--vscode-button-secondaryBackground, rgba(128, 128, 128, 0.1));
+  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-chip:hover {
+  background: var(--vscode-button-secondaryHoverBackground, rgba(128, 128, 128, 0.2));
+  border-color: var(--vscode-focusBorder, rgba(0, 122, 204, 0.5));
+}
+
+.filter-chip--active {
+  background: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #ffffff);
+  border-color: var(--vscode-button-background, #0e639c);
+}
+
+.filter-chip--active:hover {
+  background: var(--vscode-button-hoverBackground, #1177bb);
+  border-color: var(--vscode-button-hoverBackground, #1177bb);
+}
+
+.filter-chip--clear {
+  background: transparent;
+  border: 1px solid var(--vscode-button-border, var(--vscode-widget-border, rgba(128, 128, 128, 0.3)));
+  color: var(--vscode-descriptionForeground, var(--vscode-foreground));
+}
+
+.filter-chip--clear:hover {
+  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.1));
+  border-color: var(--vscode-focusBorder, rgba(0, 122, 204, 0.5));
+}
+
+/* ── Role prompt cards ────────────────────────────────────────────────────── */
+.role-prompt-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.role-prompt-card {
+  padding: 8px;
+  background: var(--vscode-editor-inactiveSelectionBackground, rgba(255, 255, 255, 0.03));
+  border-radius: 4px;
+  border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
+}
+
+.role-prompt-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.role-prompt-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.role-prompt-text {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.role-prompt-tools {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.7;
+}
+
+/* ── Show all roles button ─────────────────────────────────────────────────── */
+.btn-show-all {
+  background: none;
+  border: none;
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+  padding: 4px 0;
+  font-size: 11px;
+  font-family: var(--vscode-font-family);
+}
+
+.btn-show-all:hover {
+  text-decoration: underline;
+}
+
+/* Legacy button styles (kept for compatibility) */
 .btn-install {
   padding: 2px 8px;
   font-size: 11px;

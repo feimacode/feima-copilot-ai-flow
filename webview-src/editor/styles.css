@@ -148,6 +148,7 @@ body {
 --------------------------------------------------------------------------- */
 
 .flow-node {
+	position: relative;
 	background: var(--vscode-editor-background, #1e1e1e);
 	border: 1px solid var(--vscode-panel-border, #474747);
 	border-radius: 6px;
@@ -225,10 +226,14 @@ body {
 	margin-top: 3px;
 	font-size: 11px;
 	color: var(--vscode-descriptionForeground, #888);
-	white-space: nowrap;
+	white-space: pre-wrap;
 	overflow: hidden;
-	text-overflow: ellipsis;
+	display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 3;
+		line-height: 1.5;
 	font-style: italic;
+	word-break: break-word;
 }
 
 .stage-iterations {
@@ -241,6 +246,54 @@ body {
 	padding: 1px 4px;
 }
 
+/* ---------------------------------------------------------------------------
+   Portal-based markdown tooltip (rendered in document.body)
+--------------------------------------------------------------------------- */
+
+.portal-tooltip {
+	position: fixed;
+	z-index: 99999;
+	max-height: 280px;
+	overflow-y: auto;
+	background: var(--vscode-editorHoverWidget-background, #252526);
+	border: 1px solid var(--vscode-editorHoverWidget-border, #454545);
+	border-radius: 5px;
+	box-shadow: 0 6px 24px rgba(0, 0, 0, 0.7);
+	pointer-events: none;
+	margin-top: 0;
+}
+
+.portal-tooltip-content {
+	padding: 10px 12px;
+	font-size: 11px;
+	line-height: 1.6;
+	color: var(--vscode-editorHoverWidget-foreground, #cccccc);
+	font-style: normal;
+}
+
+.portal-tooltip-content p {
+	margin: 0 0 6px 0;
+}
+
+.portal-tooltip-content p:last-child {
+	margin-bottom: 0;
+}
+
+.portal-tooltip-content strong {
+	color: var(--vscode-editor-foreground, #d4d4d4);
+}
+
+.portal-tooltip-content em {
+	color: var(--vscode-descriptionForeground, #888);
+}
+
+.portal-tooltip-content code {
+	font-family: var(--vscode-editor-font-family, 'Consolas', 'Courier New', monospace);
+	font-size: 10px;
+	background: var(--vscode-textCodeBlock-background, rgba(10, 10, 10, 0.4));
+	padding: 1px 4px;
+	border-radius: 3px;
+}
 /* Compact icon buttons (edit / delete) */
 
 .icon-btn {
@@ -265,10 +318,41 @@ body {
 	color: var(--vscode-editor-foreground, #d4d4d4);
 }
 
+.magnifier-btn {
+	font-size: 13px;
+	opacity: 0.5;
+}
+
+.magnifier-btn:hover {
+	opacity: 1;
+	color: var(--vscode-focusBorder, #007acc);
+}
 .delete-btn:hover {
 	color: var(--vscode-errorForeground, #f48771);
 }
 
+/* ---------------------------------------------------------------------------
+   Minimap close button (overlaid near MiniMap)
+--------------------------------------------------------------------------- */
+
+.minimap-close-btn {
+	padding: 2px 6px;
+	font-size: 11px;
+	line-height: 1.4;
+	cursor: pointer;
+	background: var(--vscode-editorWidget-background, #252526);
+	border: 1px solid var(--vscode-editorWidget-border, #454545);
+	border-radius: 3px;
+	color: var(--vscode-descriptionForeground, #888);
+	font-family: inherit;
+	opacity: 0.7;
+	transition: opacity 0.12s, color 0.12s;
+}
+
+.minimap-close-btn:hover {
+	opacity: 1;
+	color: var(--vscode-errorForeground, #f48771);
+}
 /* ---------------------------------------------------------------------------
    Edit dialog
 --------------------------------------------------------------------------- */
@@ -294,6 +378,10 @@ body {
 	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
 }
 
+.dialog-flow-lg {
+	width: 560px;
+	max-height: 88vh;
+}
 .dialog-header {
 	display: flex;
 	align-items: center;
@@ -391,6 +479,46 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
+   Dialog footer (Save / Discard)
+--------------------------------------------------------------------------- */
+
+.dialog-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	padding: 10px 16px;
+	border-top: 1px solid var(--vscode-panel-border, #3c3c3c);
+	flex-shrink: 0;
+}
+
+.dialog-btn {
+	padding: 5px 16px;
+	border: none;
+	border-radius: 2px;
+	cursor: pointer;
+	font-size: 12px;
+	font-family: inherit;
+	line-height: 1.6;
+}
+
+.dialog-btn-primary {
+	background: var(--vscode-button-background, #0e639c);
+	color: var(--vscode-button-foreground, #ffffff);
+}
+
+.dialog-btn-primary:hover {
+	background: var(--vscode-button-hoverBackground, #1177bb);
+}
+
+.dialog-btn-secondary {
+	background: var(--vscode-button-secondaryBackground, #3a3d41);
+	color: var(--vscode-button-secondaryForeground, #cccccc);
+}
+
+.dialog-btn-secondary:hover {
+	background: var(--vscode-button-secondaryHoverBackground, #45494e);
+}
+/* ---------------------------------------------------------------------------
    Shared .row utility (used in both dialog and nodes)
 --------------------------------------------------------------------------- */
 
@@ -416,6 +544,7 @@ body {
 	border-radius: 8px;
 	box-sizing: border-box;
 	position: relative;
+	overflow: hidden;
 }
 
 .stage-group-header {
@@ -478,3 +607,4 @@ body {
 	-webkit-line-clamp: 2;
 	-webkit-box-orient: vertical;
 }
+

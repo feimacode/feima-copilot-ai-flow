@@ -24,6 +24,7 @@
     "category": {
       "type": "string",
       "enum": [
+        "examples",
         "software-development",
         "business",
         "creative",

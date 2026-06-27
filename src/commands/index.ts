@@ -142,19 +142,33 @@ export function registerCommands(context: vscode.ExtensionContext, logService: I
 
 	// Open visual editor for the current flow file
 	context.subscriptions.push(
-		vscode.commands.registerCommand('feima.copilot-ai-flow.openVisualEditor', async () => {
+		vscode.commands.registerCommand('feima.copilot-ai-flow.openVisualEditor', async (uri?: vscode.Uri) => {
 			logService.info('openVisualEditor command triggered');
 
-			const activeEditor = vscode.window.activeTextEditor;
-			
-			if (!activeEditor) {
-				logService.warn('No active editor found');
-				vscode.window.showErrorMessage('No active editor. Please open a flow file first.');
-				return;
+			// If URI is provided (e.g., from explorer context menu), use it
+			// Otherwise, use the active editor's document
+			let targetUri: vscode.Uri;
+			if (uri) {
+				targetUri = uri;
+			} else {
+				// Try text editor first
+				const activeTextEditor = vscode.window.activeTextEditor;
+				if (activeTextEditor) {
+					targetUri = activeTextEditor.document.uri;
+				} else {
+					// Try custom editor (visual editor)
+					const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
+					if (activeTab && activeTab.input instanceof vscode.TabInputCustom) {
+						targetUri = activeTab.input.uri;
+					} else {
+						logService.warn('No active editor found');
+						vscode.window.showErrorMessage('No active editor. Please open a flow file first.');
+						return;
+					}
+				}
 			}
 			
-			const uri = activeEditor.document.uri;
-			const filename = uri.fsPath;
+			const filename = targetUri.fsPath;
 			
 			logService.info(`Attempting to open visual editor for: ${filename}`);
 			
@@ -168,7 +182,7 @@ export function registerCommands(context: vscode.ExtensionContext, logService: I
 			// Open with the custom editor
 			try {
 				logService.info(`Opening with custom editor: feima.copilot-ai-flow.flowEditor`);
-				await vscode.commands.executeCommand('vscode.openWith', uri, 'feima.copilot-ai-flow.flowEditor');
+				await vscode.commands.executeCommand('vscode.openWith', targetUri, 'feima.copilot-ai-flow.flowEditor');
 				logService.info('Visual editor opened successfully');
 			} catch (error) {
 				logService.error(`Failed to open visual editor: ${error}`);
@@ -180,14 +194,26 @@ export function registerCommands(context: vscode.ExtensionContext, logService: I
 	// Toggle between text and visual editor
 	context.subscriptions.push(
 		vscode.commands.registerCommand('feima.copilot-ai-flow.toggleEditor', async () => {
-			const activeEditor = vscode.window.activeTextEditor;
+			let uri: vscode.Uri;
+			let isCurrentlyVisualEditor = false;
 			
-			if (!activeEditor) {
-				vscode.window.showErrorMessage('No active editor. Please open a flow file first.');
-				return;
+			// Check if we're in a text editor
+			const activeTextEditor = vscode.window.activeTextEditor;
+			if (activeTextEditor) {
+				uri = activeTextEditor.document.uri;
+				isCurrentlyVisualEditor = false;
+			} else {
+				// Check if we're in a custom editor
+				const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
+				if (activeTab && activeTab.input instanceof vscode.TabInputCustom) {
+					uri = activeTab.input.uri;
+					isCurrentlyVisualEditor = activeTab.input.viewType === 'feima.copilot-ai-flow.flowEditor';
+				} else {
+					vscode.window.showErrorMessage('No active editor. Please open a flow file first.');
+					return;
+				}
 			}
-			
-			const uri = activeEditor.document.uri;
+
 			const filename = uri.fsPath;
 			
 			// Check if it's a flow file
@@ -196,18 +222,7 @@ export function registerCommands(context: vscode.ExtensionContext, logService: I
 				return;
 			}
 			
-			// Determine current editor type and toggle
-			// Check if we have a custom editor open for this document
-			const tabEditors = vscode.window.tabGroups.all.flatMap(group => group.tabs).flatMap(tab => {
-				if (tab.input instanceof vscode.TabInputCustom) {
-					return tab.input;
-				}
-				return [];
-			});
-			
-			const hasCustomEditor = tabEditors.some(editor => editor.uri.toString() === uri.toString());
-			
-			if (hasCustomEditor) {
+			if (isCurrentlyVisualEditor) {
 				// Currently in visual editor, switch to text editor
 				await vscode.commands.executeCommand('vscode.openWith', uri, 'default');
 			} else {
@@ -218,6 +233,92 @@ export function registerCommands(context: vscode.ExtensionContext, logService: I
 					vscode.window.showErrorMessage(`Failed to open visual editor: ${error}`);
 				}
 			}
+		})
+	);
+
+	// Open text editor for the current flow file (switch from visual editor)
+	context.subscriptions.push(
+		vscode.commands.registerCommand('feima.copilot-ai-flow.openTextEditor', async () => {
+			logService.info('openTextEditor command triggered');
+
+			// Get the active tab
+			const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
+			if (!activeTab || !(activeTab.input instanceof vscode.TabInputCustom)) {
+				logService.warn('No active custom editor found');
+				vscode.window.showErrorMessage('No active custom editor. Please open a flow file in the visual editor first.');
+				return;
+			}
+
+			// Check if it's our visual editor
+			if (activeTab.input.viewType !== 'feima.copilot-ai-flow.flowEditor') {
+				logService.warn('Active custom editor is not the flow visual editor');
+				vscode.window.showErrorMessage('Please open a flow file in the visual editor first.');
+				return;
+			}
+
+			const uri = activeTab.input.uri;
+			const filename = uri.fsPath;
+
+			logService.info(`Switching to text editor for: ${filename}`);
+
+			// Check if it's a flow file
+			if (!filename.endsWith('.flow.yaml') && !filename.endsWith('.flow.yml')) {
+				logService.warn(`Not a flow file: ${filename}`);
+				vscode.window.showErrorMessage('Please open a .flow.yaml or .flow.yml file first.');
+				return;
+			}
+
+			// Switch to default text editor
+			try {
+				logService.info(`Switching to default text editor`);
+				await vscode.commands.executeCommand('vscode.openWith', uri, 'default');
+				logService.info('Switched to text editor successfully');
+			} catch (error) {
+				logService.error(`Failed to switch to text editor: ${error}`);
+				vscode.window.showErrorMessage(`Failed to switch to text editor: ${error}`);
+			}
+		})
+	);
+
+	// Run flow — open chat with @flow #file:<path>
+	context.subscriptions.push(
+		vscode.commands.registerCommand('feima.copilot-ai-flow.runFlow', async (uri?: vscode.Uri) => {
+			let targetUri: vscode.Uri;
+			if (uri) {
+				targetUri = uri;
+			} else {
+				const activeTextEditor = vscode.window.activeTextEditor;
+				if (activeTextEditor) {
+					targetUri = activeTextEditor.document.uri;
+				} else {
+					const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
+					if (activeTab && activeTab.input instanceof vscode.TabInputCustom) {
+						targetUri = activeTab.input.uri;
+					} else {
+						vscode.window.showErrorMessage('No flow file open. Please open a .flow.yaml file first.');
+						return;
+					}
+				}
+			}
+
+			const filename = targetUri.fsPath;
+			if (!filename.endsWith('.flow.yaml') && !filename.endsWith('.flow.yml')) {
+				vscode.window.showErrorMessage('The active file is not a .flow.yaml file.');
+				return;
+			}
+
+			// Ask user for the initial prompt
+			const prompt = await vscode.window.showInputBox({
+				prompt: 'What would you like the flow to do?',
+				placeHolder: 'e.g. Review the authentication module for security issues',
+				validateInput: (value) => value.trim() ? undefined : 'Please enter a prompt to start the flow.',
+			});
+
+			if (!prompt) { return; }
+
+			await vscode.commands.executeCommand('workbench.action.chat.open', {
+				query: `@flow #file:${targetUri.fsPath} ${prompt}`
+			});
 		})
 	);
 }

@@ -52,6 +52,8 @@ export interface ICatalogFlow {
 	readonly provider: string;
 	readonly uses_skills?: readonly string[];
 	readonly uses_prompts?: readonly string[];
+	/** Aggregate star count from GitHub gist/repo (optional, may be added by catalog action) */
+	readonly stars?: number;
 }
 
 export interface ICatalogIndex {

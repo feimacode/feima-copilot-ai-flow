@@ -1,9 +1,4 @@
-# gallery-onboarding Specification
-
-## Purpose
-Enhance the flow gallery webview with quick-run buttons, tutorial links, difficulty filters, tile grid layout, install buttons, and card metadata to improve discoverability and onboarding.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Quick-run button on gallery flow cards
 Each flow card in the gallery webview (`webview-src/gallery/FlowCard.tsx`) SHALL include a "Run" button as a primary action. For installed flows, the button SHALL copy the `@flow #file:<flow-id>.flow.yaml` invocation to the user's clipboard. For uninstalled flows, the button SHALL trigger installation first, then copy the invocation.
@@ -41,6 +36,8 @@ The gallery webview SHALL include filter chips for difficulty levels: Beginner, 
 #### Scenario: User clears filters
 - **WHEN** a user clicks "Clear filters"
 - **THEN** all flow cards SHALL be displayed regardless of difficulty
+
+## ADDED Requirements
 
 ### Requirement: Gallery displays responsive tile grid
 The gallery webview SHALL display flow cards in a CSS Grid layout that auto-adjusts columns based on panel width. Cards SHALL have minimum width 280px and gap spacing 12px.

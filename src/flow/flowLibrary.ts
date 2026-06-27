@@ -148,6 +148,22 @@ export class FlowLibrary {
 	}
 
 	/**
+	 * Get the YAML content of a catalog flow for viewing.
+	 * For catalog flows, fetches from the source URI.
+	 * For builtin/workspace flows, reads from the file path.
+	 */
+	async getCatalogFlowContent(entry: IFlowEntry): Promise<string | undefined> {
+		if (entry.source === 'catalog' && entry.sourceUri) {
+			const result = await fetchFlow(entry.sourceUri);
+			return result.content;
+		} else if (entry.filePath) {
+			const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(entry.filePath));
+			return Buffer.from(bytes).toString('utf8');
+		}
+		return undefined;
+	}
+
+	/**
 	 * Refresh all sources (clears caches and re-scans).
 	 */
 	async refresh(forceFetch: boolean = false): Promise<IFlowEntry[]> {

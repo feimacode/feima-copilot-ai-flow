@@ -26,15 +26,17 @@ const nodeTypes: NodeTypes = {
 interface FlowPreviewProps {
 	/** Raw YAML content of a *.flow.yaml file. */
 	yaml: string;
-	/** Height of the preview canvas in px. Default 180. */
+	/** Height of the preview canvas in px. Default 300. */
 	height?: number;
+	/** Compact mode for card previews (80px, no interactions, smaller fonts). Default false. */
+	compact?: boolean;
 }
 
 /**
  * Read-only mini React Flow canvas for gallery previews.
  * Parses the YAML and renders nodes with all interaction disabled.
  */
-export function FlowPreview({ yaml, height = 180 }: FlowPreviewProps) {
+export function FlowPreview({ yaml, height = 300, compact = false }: FlowPreviewProps) {
 	const { nodes, edges } = useMemo(() => {
 		try {
 			const result = parseFlowDoc(yaml);
@@ -52,24 +54,28 @@ export function FlowPreview({ yaml, height = 180 }: FlowPreviewProps) {
 		);
 	}
 
+	const containerStyle = compact
+		? { height, width: '100%', borderRadius: 4, overflow: 'hidden', border: '1px solid var(--vscode-widget-border, rgba(128,128,128,0.3))' }
+		: { height: '100%', width: '100%', borderRadius: 4, overflow: 'hidden', border: '1px solid var(--vscode-widget-border, rgba(128,128,128,0.3))' };
+
 	return (
-		<div style={{ height, width: '100%', borderRadius: 4, overflow: 'hidden', border: '1px solid var(--vscode-widget-border, rgba(128,128,128,0.3))' }}>
+		<div style={containerStyle}>
 			<ReactFlow
 				nodes={nodes}
 				edges={edges}
 				nodeTypes={nodeTypes}
 				fitView
 				fitViewOptions={{ padding: 0.2 }}
-				nodesDraggable={false}
+				nodesDraggable={!compact}
 				nodesConnectable={false}
 				elementsSelectable={false}
-				zoomOnScroll={false}
-				panOnDrag={false}
+				zoomOnScroll={!compact}
+				panOnDrag={!compact}
 				panOnScroll={false}
 				preventScrolling={false}
 				proOptions={{ hideAttribution: true }}
 			>
-				<Background gap={16} size={1} />
+				{!compact && <Background gap={16} size={1} />}
 			</ReactFlow>
 		</div>
 	);

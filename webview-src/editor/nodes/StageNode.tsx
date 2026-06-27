@@ -18,6 +18,12 @@ export function StageNode({ data }: NodeProps) {
 				<span className="node-badge stage-badge">Stage</span>
 				<span className="stage-group-title">{d.stageName}</span>
 				{d.iterations > 1 && <span className="stage-iterations">×{d.iterations}</span>}
+				<button
+					className="icon-btn edit-btn"
+					onClick={d.onEdit}
+					title="Edit stage"
+					aria-label="Edit stage"
+				>{'\u270e'}</button>
 			</div>
 			<Handle type="source" position={Position.Bottom} />
 		</div>

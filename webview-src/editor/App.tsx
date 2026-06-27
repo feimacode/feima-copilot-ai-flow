@@ -3,7 +3,7 @@
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	ReactFlow,
 	Background,
@@ -24,7 +24,8 @@ import { RoleNode } from './nodes/RoleNode';
 import { StageNode } from './nodes/StageNode';
 import { NodeDialog } from './nodes/NodeDialog';
 import { parseFlowDoc, serializeFlowDoc } from '../shared/serialize';
-import type { MetaNodeData, RoleNodeData, StageMeta } from '../shared/serialize';
+import { PortalTooltip } from '../shared/PortalTooltip';
+import type { MetaNodeData, RoleNodeData, StageNodeData, StageMeta } from '../shared/serialize';
 
 // acquireVsCodeApi is injected into the webview context by VS Code.
 declare function acquireVsCodeApi(): {
@@ -113,6 +114,24 @@ function withCallbacks(
 							n.type === 'roleNode' ? { ...n, data: { ...n.data, index: roleIdx++ } } : n
 						);
 					});
+				},
+				onEdit() {
+					setEditingNodeId(node.id);
+				},
+			},
+		};
+	}
+
+	if (node.type === 'stageNode') {
+		return {
+			...node,
+			data: {
+				...node.data,
+				onChange(patch: Partial<Pick<StageNodeData, 'stageName' | 'iterations'>>) {
+					isDirtyRef.current = true;
+					setNodes(prev =>
+						prev.map(n => n.id === node.id ? { ...n, data: { ...n.data, ...patch } } : n)
+					);
 				},
 				onEdit() {
 					setEditingNodeId(node.id);
@@ -266,73 +285,37 @@ export function App() {
 		setEdges(prev => applyEdgeChanges(changes, prev));
 	}, []);
 
-	const addRole = useCallback(() => {
-		const newId = `role-${Date.now()}`;
-		isDirtyRef.current = true;
-
-		// Fix #8: compute new node and edge in the same logical batch.
-		setNodes(prev => {
-			const roleNodes = prev
-				.filter(n => n.type === 'roleNode')
-				.sort((a, b) => a.position.y - b.position.y);
-			const newIdx = roleNodes.length;
-			const lastY = roleNodes.length > 0 ? roleNodes[roleNodes.length - 1].position.y : 280;
-
-			const newRaw: Node = {
-				id: newId,
-				type: 'roleNode',
-				position: { x: 300, y: lastY + 240 },
-				data: {
-					name: `Role ${newIdx + 1}`,
-					prompt: '',
-					model: '',
-					index: newIdx,
-					onChange: () => {},
-					onDelete: () => {},
-					onEdit: () => {},
-				} as RoleNodeData,
-			};
-			return buildNodes([...prev, newRaw]);
-		});
-
-		setEdges(prev => {
-			const allTargets = new Set(prev.map(e => e.target));
-			const leafSource = [...prev.map(e => e.source)]
-				.filter(s => !allTargets.has(s))
-				.pop() ?? 'meta';
-			return [
-				...prev,
-				{ id: `edge-${leafSource}-${newId}`, source: leafSource, target: newId, animated: true },
-			];
-		});
-
-		// Fix #2: extend the last stage when the panel uses stages.
-		if (stageMetaRef.current) {
-			const stages = stageMetaRef.current;
-			const last = stages[stages.length - 1];
-			stageMetaRef.current = [
-				...stages.slice(0, -1),
-				{ ...last, roleCount: last.roleCount + 1 },
-			];
-		}
-	}, [buildNodes]);
-
 	const metaData = nodes.find(n => n.id === 'meta')?.data as MetaNodeData | undefined;
 	const flowNodes = nodes.filter(n => n.id !== 'meta');
 	const flowEdges = edges.filter(e => e.source !== 'meta' && e.target !== 'meta');
 	const isEmpty = flowNodes.length === 0;
 
+	const [showMiniMap, setShowMiniMap] = useState(true);
+	const [showMetaTooltip, setShowMetaTooltip] = useState(false);
+	const metaMagRef = useRef<HTMLButtonElement>(null);
+
+	const metaTooltipText = useMemo(() => {
+		if (metaData?.sharedContext) { return metaData.sharedContext; }
+		return metaData?.description ?? '';
+	}, [metaData?.sharedContext, metaData?.description]);
+
 	return (
 		<div className="app-root">
 			<div className="toolbar">
 				<span className="toolbar-title">Flow Editor</span>
-				<button className="toolbar-btn" onClick={addRole}>+ Add Role</button>
+				<button
+					className="toolbar-btn"
+					onClick={() => vscode.postMessage({ type: 'run' })}
+					title="Execute this flow in chat"
+				>
+					&#9654; Run Flow
+				</button>
 				<button
 					className="toolbar-btn secondary"
-					onClick={() => vscode.postMessage({ type: 'openTextEditor' })}
-					title="Open the raw YAML source in a side-by-side text editor"
+					onClick={() => setShowMiniMap(v => !v)}
+					title={showMiniMap ? 'Hide minimap' : 'Show minimap'}
 				>
-					Edit Source
+					{showMiniMap ? 'Hide Map' : 'Show Map'}
 				</button>
 			</div>
 
@@ -359,11 +342,21 @@ export function App() {
 								<div className="canvas-meta-flow">
 									<div className="canvas-meta-header">
 										<span className="canvas-meta-name">{metaData.name || 'Untitled Flow'}</span>
+											{metaTooltipText && (
+												<button
+													ref={metaMagRef}
+													className="icon-btn magnifier-btn"
+													onMouseEnter={() => setShowMetaTooltip(true)}
+													onMouseLeave={() => setShowMetaTooltip(false)}
+													title="View shared context"
+													aria-label="View shared context"
+												>{'\ud83d\udd0d'}</button>
+											)}
 										<button
 											className="icon-btn edit-btn"
 											onClick={() => setEditingNodeId('meta')}
 											title="Edit flow metadata"
-										>\u270e</button>
+											>{'\u270e'}</button>
 									</div>
 									{metaData.description && (
 										<div className="canvas-meta-desc">{metaData.description}</div>
@@ -371,10 +364,24 @@ export function App() {
 								</div>
 							</Panel>
 						)}
+							<PortalTooltip text={metaTooltipText} triggerRef={metaMagRef} visible={showMetaTooltip} direction="down" />
 						<FitViewOnLoad nodeCount={flowNodes.length} />
 						<Background gap={20} />
 						<Controls />
-						<MiniMap nodeColor={() => 'var(--vscode-editor-inactiveSelectionBackground, #3a3d41)'} />
+							{showMiniMap && (
+								<>
+									<MiniMap
+										nodeColor={() => 'var(--vscode-editor-inactiveSelectionBackground, #3a3d41)'}
+									/>
+									<Panel position="bottom-right">
+										<button
+											className="minimap-close-btn"
+											onClick={() => setShowMiniMap(false)}
+											title="Close minimap"
+										>✕</button>
+									</Panel>
+								</>
+							)}
 					</ReactFlow>
 				)}
 				{editingNodeId && (

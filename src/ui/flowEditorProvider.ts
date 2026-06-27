@@ -68,6 +68,11 @@ export class FlowEditorProvider implements vscode.CustomTextEditorProvider {
 					sendUpdate();
 					break;
 
+				case 'run':
+					// Execute the flow in chat.
+					vscode.commands.executeCommand('feima.copilot-ai-flow.runFlow', document.uri);
+					break;
+
 				case 'change': {
 					// Guard: skip no-op edits (e.g. position-only drag that doesn't
 					// affect YAML) to avoid marking the document dirty unnecessarily.

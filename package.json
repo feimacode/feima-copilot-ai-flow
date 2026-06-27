@@ -35,7 +35,8 @@
     "github.copilot-chat"
   ],
   "activationEvents": [
-    "onLanguageModel:*"
+    "onLanguageModel:*",
+    "onLanguage:yaml"
   ],
   "enabledApiProposals": [
     "chatSessionsProvider",
@@ -121,21 +122,39 @@
         "icon": "$(preview)"
       },
       {
+        "command": "feima.copilot-ai-flow.openTextEditor",
+        "title": "Open Text Editor",
+        "category": "AI Flow",
+        "icon": "$(go-to-file)"
+      },
+      {
         "command": "feima.copilot-ai-flow.toggleEditor",
         "title": "Toggle Editor",
         "category": "AI Flow",
         "icon": "$(compare-changes)"
+      },
+      {
+        "command": "feima.copilot-ai-flow.runFlow",
+        "title": "Run Flow",
+        "category": "AI Flow",
+        "icon": "$(play)"
       }
     ],
     "keybindings": [
       {
+        "command": "feima.copilot-ai-flow.runFlow",
+        "key": "ctrl+shift+r",
+        "when": "editorFocus && resourceFilename =~ /\\.flow\\.ya?ml$/ && !notebookEditorFocused"
+      },
+      {
         "command": "feima.copilot-ai-flow.openVisualEditor",
-        "key": "ctrl+shift+e"
+        "key": "ctrl+shift+v",
+        "when": "editorFocus && resourceFilename =~ /\\.flow\\.ya?ml$/ && !notebookEditorFocused"
       },
       {
         "command": "feima.copilot-ai-flow.toggleEditor",
-        "key": "ctrl+k e",
-        "when": "resourceExtname =~ /\\.flow\\.ya?ml$/"
+        "key": "ctrl+k v",
+        "when": "!terminalFocus && ((editorFocus && resourceFilename =~ /\\.flow\\.ya?ml$/ && !notebookEditorFocused) || activeCustomEditorId == 'feima.copilot-ai-flow.flowEditor')"
       }
     ],
     "languages": [
@@ -204,7 +223,40 @@
         ],
         "priority": "option"
       }
-    ]
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "feima.copilot-ai-flow.runFlow",
+          "when": "resourceFilename =~ /\\.flow\\.ya?ml$/ && !notebookEditorFocused",
+          "group": "navigation"
+        },
+        {
+          "command": "feima.copilot-ai-flow.openVisualEditor",
+          "when": "resourceFilename =~ /\\.flow\\.ya?ml$/ && !notebookEditorFocused && activeCustomEditorId != 'feima.copilot-ai-flow.flowEditor'",
+          "group": "navigation"
+        },
+        {
+          "command": "feima.copilot-ai-flow.openTextEditor",
+          "when": "activeCustomEditorId == 'feima.copilot-ai-flow.flowEditor'",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "feima.copilot-ai-flow.openVisualEditor",
+          "when": "resourceFilename =~ /\\.flow\\.ya?ml$/",
+          "group": "navigation"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "feima.copilot-ai-flow.openVisualEditor",
+          "when": "resourceFilename =~ /\\.flow\\.ya?ml$/",
+          "group": "1_open"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

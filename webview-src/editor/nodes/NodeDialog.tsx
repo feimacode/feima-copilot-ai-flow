@@ -3,7 +3,7 @@
  *  Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Node } from '@xyflow/react';
 import type { MetaNodeData, RoleNodeData, StageNodeData } from '../../shared/serialize';
 
@@ -12,13 +12,17 @@ import type { MetaNodeData, RoleNodeData, StageNodeData } from '../../shared/ser
 // ---------------------------------------------------------------------------
 
 function MetaForm({ d }: { d: MetaNodeData }) {
-	// Sync comma-string inputs with external node data changes (same pattern as old MetaNode).
+	// Sync comma-string inputs with draft changes.
 	const tagsStr = (d.tags ?? []).join(', ');
 	const toolsStr = (d.tools ?? []).join(', ');
 	const [tagsInput, setTagsInput] = useState(tagsStr);
 	const [toolsInput, setToolsInput] = useState(toolsStr);
-	useEffect(() => { setTagsInput(tagsStr); }, [tagsStr]);
-	useEffect(() => { setToolsInput(toolsStr); }, [toolsStr]);
+	const prevTags = useRef(tagsStr);
+	const prevTools = useRef(toolsStr);
+	if (prevTags.current !== tagsStr) { prevTags.current = tagsStr; }
+	if (prevTools.current !== toolsStr) { prevTools.current = toolsStr; }
+	useEffect(() => { setTagsInput(prevTags.current); }, [prevTags.current]);
+	useEffect(() => { setToolsInput(prevTools.current); }, [prevTools.current]);
 
 	return (
 		<>
@@ -41,12 +45,22 @@ function MetaForm({ d }: { d: MetaNodeData }) {
 				/>
 			</label>
 
+			<label>
+				Shared Context
+				<textarea
+					value={d.sharedContext}
+					onChange={e => d.onChange({ sharedContext: e.target.value })}
+					rows={4}
+					placeholder="Instructions or context shared by all roles..."
+				/>
+			</label>
+
 			<div className="row">
 				<label>
 					Orchestration
 					<select
-						value={d.orchestration}
-						onChange={e => d.onChange({ orchestration: e.target.value as 'sequence' | 'cli' })}
+						value={(d as any).orchestration}
+						onChange={e => d.onChange({ orchestration: e.target.value as any })}
 					>
 						<option value="sequence">sequence</option>
 						<option value="cli">cli</option>
@@ -126,14 +140,14 @@ function MetaForm({ d }: { d: MetaNodeData }) {
 				</label>
 			</div>
 
-			{d.orchestration === 'cli' && (
+			{(d as any).orchestration === 'cli' && (
 				<>
 					<div className="row">
 						<label>
 							CLI Mode
 							<select
-								value={d.cliMode}
-								onChange={e => d.onChange({ cliMode: e.target.value })}
+								value={(d as any).cliMode}
+								onChange={e => d.onChange({ cliMode: e.target.value } as any)}
 							>
 								<option value="">—</option>
 								<option value="supervised">supervised</option>
@@ -143,8 +157,8 @@ function MetaForm({ d }: { d: MetaNodeData }) {
 						<label>
 							Isolation
 							<select
-								value={d.isolation}
-								onChange={e => d.onChange({ isolation: e.target.value })}
+								value={(d as any).isolation}
+								onChange={e => d.onChange({ isolation: e.target.value } as any)}
 							>
 								<option value="">—</option>
 								<option value="workspace">workspace</option>
@@ -187,7 +201,7 @@ function RoleForm({ d }: { d: RoleNodeData }) {
 				<textarea
 					value={d.prompt}
 					onChange={e => d.onChange({ prompt: e.target.value })}
-					rows={12}
+					rows={16}
 					placeholder="Define the role's perspective, responsibilities, and output format..."
 				/>
 			</label>
@@ -205,7 +219,41 @@ function RoleForm({ d }: { d: RoleNodeData }) {
 }
 
 // ---------------------------------------------------------------------------
-// NodeDialog — floating dialog shell
+// StageForm — stage name and iterations
+// ---------------------------------------------------------------------------
+
+function StageForm({ d }: { d: StageNodeData }) {
+	return (
+		<>
+			<label>
+				Name
+				<input
+					value={d.stageName}
+					onChange={e => d.onChange({ stageName: e.target.value })}
+					placeholder="e.g. Planning, Review"
+				/>
+			</label>
+
+			<label>
+				Iterations
+				<input
+					type="number"
+					min={1}
+					max={99}
+					value={d.iterations}
+					onChange={e => {
+						const v = Math.max(1, parseInt(e.target.value, 10) || 1);
+						d.onChange({ iterations: v });
+					}}
+				/>
+				<span className="hint">Number of times to loop this stage's roles</span>
+			</label>
+		</>
+	);
+}
+
+// ---------------------------------------------------------------------------
+// NodeDialog — floating dialog with Save / Discard
 // ---------------------------------------------------------------------------
 
 interface NodeDialogProps {
@@ -217,6 +265,42 @@ interface NodeDialogProps {
 export function NodeDialog({ nodeId, nodes, onClose }: NodeDialogProps) {
 	const node = nodes.find(n => n.id === nodeId);
 
+	// Snapshot the live node data when the dialog first opens. We will edit
+	// a local draft and only flush it back on Save — onClose discards.
+	const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
+	useEffect(() => {
+		if (node) {
+			const { onChange, onEdit, onDelete, ...rest } = node.data as any;
+			setDraft({ ...rest });
+		}
+	}, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+	const updateDraft = useCallback((patch: Record<string, unknown>) => {
+		setDraft(prev => prev ? { ...prev, ...patch } : null);
+	}, []);
+
+	// Proxy data object that looks like the real node data but writes to draft.
+	const draftData = useMemo(() => {
+		if (!draft) { return null; }
+		return {
+			...draft,
+			onChange: (patch: Record<string, unknown>) => updateDraft(patch),
+			onEdit: () => { },
+			onDelete: () => { },
+		};
+	}, [draft, updateDraft]);
+
+	const handleSave = useCallback(() => {
+		if (!node || !draft) { return; }
+		// Flush entire draft to the real node — the onChange callback in App
+		// does `{ ...prev, ...patch }` so passing the full state replaces all.
+		const nodeData = node.data as Record<string, unknown>;
+		if (typeof nodeData.onChange === 'function') {
+			nodeData.onChange(draft);
+		}
+		onClose();
+	}, [node, draft, onClose]);
+
 	// Close on Escape.
 	useEffect(() => {
 		const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') { onClose(); } };
@@ -224,37 +308,44 @@ export function NodeDialog({ nodeId, nodes, onClose }: NodeDialogProps) {
 		return () => window.removeEventListener('keydown', handler);
 	}, [onClose]);
 
-	if (!node) { return null; }
+	if (!node || !draftData) { return null; }
 
 	let title: string;
+	let FormComponent: React.FC<{ d: any }> | null = null;
+	const formProps = { d: draftData };
+
 	if (node.type === 'metaNode') {
 		title = 'Flow Settings';
+		FormComponent = MetaForm;
 	} else if (node.type === 'roleNode') {
 		const d = node.data as RoleNodeData;
 		title = `Role ${d.index + 1}: ${d.name || 'Unnamed Role'}`;
+		FormComponent = RoleForm;
+	} else if (node.type === 'stageNode') {
+		title = `Stage: ${(node.data as StageNodeData).stageName}`;
+		FormComponent = StageForm;
 	} else {
-		const d = node.data as StageNodeData;
-		title = `Stage: ${d.stageName}`;
+		title = 'Unknown Node';
 	}
 
 	return (
 		<div className="dialog-backdrop" onClick={onClose}>
-			<div className="dialog-flow" onClick={e => e.stopPropagation()}>
+			<div className="dialog-flow dialog-flow-lg" onClick={e => e.stopPropagation()}>
 				<div className="dialog-header">
 					<span className="dialog-title">{title}</span>
-					<button className="dialog-close" onClick={onClose} aria-label="Close dialog">✕</button>
+					<button className="dialog-close" onClick={onClose} aria-label="Discard changes">✕</button>
 				</div>
 				<div className="dialog-body">
-					{node.type === 'metaNode' && <MetaForm d={node.data as MetaNodeData} />}
-					{node.type === 'roleNode' && <RoleForm d={node.data as RoleNodeData} />}
-					{node.type === 'stageNode' && (
-						<p className="stage-readonly-hint">
-							Stage structure is defined in the YAML source. Use{' '}
-							<strong>Edit Source</strong> to modify stages.
-						</p>
-					)}
+					{FormComponent && <FormComponent {...formProps} />}
 				</div>
+				{FormComponent && (
+					<div className="dialog-footer">
+						<button className="dialog-btn dialog-btn-secondary" onClick={onClose}>Discard</button>
+						<button className="dialog-btn dialog-btn-primary" onClick={handleSave}>Save</button>
+					</div>
+				)}
 			</div>
 		</div>
 	);
 }
+

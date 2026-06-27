@@ -14,6 +14,7 @@ import type { IFlowDocument, IFlowRole, IFlowStage } from '../../src/types/flowD
 export interface MetaNodeData extends Record<string, unknown> {
 	name: string;
 	description: string;
+	sharedContext: string;
 	category: string;
 	difficulty: string;
 	tags: string[];
@@ -39,6 +40,8 @@ export interface RoleNodeData extends Record<string, unknown> {
 export interface StageNodeData extends Record<string, unknown> {
 	stageName: string;
 	iterations: number;
+	onChange: (patch: Partial<Pick<StageNodeData, 'stageName' | 'iterations'>>) => void;
+	onEdit: () => void;
 }
 
 /** Preserved stage structure so serializeFlowDoc can reconstruct the YAML correctly. */
@@ -56,13 +59,13 @@ export interface StageMeta {
 const NODE_X = 0;
 // Flat panels: first role starts at y=0 (no meta node in the flow).
 const ROLE_START_Y = 0;
-const ROLE_GAP = 78;   // ROLE_HEIGHT(62) + GAP(16)
+const ROLE_GAP = 116;  // ROLE_HEIGHT(100) + GAP(16)
 
 // Stage group layout
 const STAGE_PAD_X = 16;       // horizontal padding inside stage group
 const STAGE_PAD_Y = 12;       // vertical padding inside stage group
 const STAGE_HEADER = 44;      // height of stage group header bar
-const ROLE_HEIGHT = 62;       // rendered height of a compact role node
+const ROLE_HEIGHT = 100;      // rendered height of a compact role node (with 3-line preview)
 const ROLE_GAP_Y = 12;        // gap between roles inside a stage
 const STAGE_WIDTH = 272;      // ROLE_WIDTH(240) + STAGE_PAD_X(16) * 2
 const INTER_STAGE_GAP = 60;   // vertical gap between stage groups
@@ -103,6 +106,7 @@ export function parseFlowDoc(content: string): ParseResult {
 	const metaData: MetaNodeData = {
 		name: String(fm.name ?? ''),
 		description: String(fm.description ?? ''),
+		sharedContext: String(fm.sharedContext ?? ''),
 		category: String(fm.category ?? ''),
 		difficulty: String(fm.difficulty ?? ''),
 		tags: Array.isArray(fm.tags) ? (fm.tags as string[]) : [],
@@ -111,6 +115,9 @@ export function parseFlowDoc(content: string): ParseResult {
 		model: String(fm.model ?? ''),
 		tools: Array.isArray(fm.tools) ? (fm.tools as string[]) : [],
 		customAgent: String(fm.customAgent ?? ''),
+		orchestration: String((fm as any).orchestration ?? ''),
+		cliMode: String((fm as any).cliMode ?? ''),
+		isolation: String((fm as any).isolation ?? ''),
 		onChange: () => { /* replaced by App */ },
 		onEdit: () => { /* replaced by App */ },
 	};
@@ -171,7 +178,6 @@ function buildStageGraph(
 		const stage = stageList[si];
 		const stageRoles: IFlowRole[] = Array.isArray(stage.roles) ? (stage.roles as IFlowRole[]) : [];
 		const roleCount = stageRoles.length;
-		const stageH = stageGroupHeight(roleCount);
 
 		stageMeta.push({
 			name: String(stage.name ?? `Stage ${si + 1}`),
@@ -181,25 +187,13 @@ function buildStageGraph(
 		});
 
 		const stageId = `stage-${si}`;
-		nodes.push({
-			id: stageId,
-			type: 'stageNode',
-			position: { x: NODE_X, y: currentY },
-			style: { width: STAGE_WIDTH, height: stageH },
-			data: {
-				stageName: stageMeta[si].name,
-				iterations: stageMeta[si].iterations,
-			} as StageNodeData,
-		});
-		if (prevStageId) {
-			edges.push({ id: `edge-${prevStageId}-${stageId}`, source: prevStageId, target: stageId, animated: true });
-		}
-		prevStageId = stageId;
 
+		// Build child role nodes first to calculate stage dimensions
+		const childNodes: Node[] = [];
 		for (let ri = 0; ri < stageRoles.length; ri++) {
 			const role = stageRoles[ri];
 			const roleId = `role-${globalRoleIdx}`;
-			nodes.push({
+			childNodes.push({
 				id: roleId,
 				type: 'roleNode',
 				parentId: stageId,
@@ -220,10 +214,72 @@ function buildStageGraph(
 			});
 			globalRoleIdx++;
 		}
+
+		// Calculate stage dimensions based on child extents
+		const stageW = computeStageWidth(childNodes);
+		const stageH = computeStageHeight(childNodes);
+
+		nodes.push({
+			id: stageId,
+			type: 'stageNode',
+			position: { x: NODE_X, y: currentY },
+			style: { width: stageW, height: stageH },
+			data: {
+				stageName: stageMeta[si].name,
+				iterations: stageMeta[si].iterations,
+				onChange: () => { /* replaced by App */ },
+				onEdit: () => { /* replaced by App */ },
+			} as StageNodeData,
+		});
+		nodes.push(...childNodes);
+
+		if (prevStageId) {
+			edges.push({ id: `edge-${prevStageId}-${stageId}`, source: prevStageId, target: stageId, animated: true });
+		}
+		prevStageId = stageId;
+
 		currentY += stageH + INTER_STAGE_GAP;
 	}
 
 	return { nodes, edges, rawBody, stageMeta };
+}
+
+/**
+ * Calculate stage width based on child node extents
+ */
+function computeStageWidth(children: Node[]): number {
+	if (children.length === 0) {
+		return STAGE_WIDTH;
+	}
+
+	// Find the rightmost edge of any child node
+	let maxX = 0;
+	for (const child of children) {
+		// Estimate child width: 320px max-width + 20px padding + 2px border
+		const childWidth = 342;
+		const rightEdge = child.position.x + childWidth;
+		maxX = Math.max(maxX, rightEdge);
+	}
+
+	return maxX + STAGE_PAD_X;
+}
+
+/**
+ * Calculate stage height based on child node extents
+ */
+function computeStageHeight(children: Node[]): number {
+	if (children.length === 0) {
+		return STAGE_HEADER + STAGE_PAD_Y * 2;
+	}
+
+	// Find the bottommost edge of any child node
+	let maxY = 0;
+	for (const child of children) {
+		const bottomEdge = child.position.y + ROLE_HEIGHT;
+		maxY = Math.max(maxY, bottomEdge);
+	}
+
+	return maxY + STAGE_PAD_Y;
 }
 
 // ---------------------------------------------------------------------------
@@ -261,16 +317,22 @@ export function serializeFlowDoc(nodes: Node[], rawBody: string, stageMeta?: Sta
 	if (meta.model) { fm.model = meta.model; }
 	if (meta.tools?.length) { fm.tools = meta.tools; }
 	if (meta.customAgent) { fm.customAgent = meta.customAgent; }
+	if ((meta as any).orchestration) { fm.orchestration = (meta as any).orchestration; }
+	if ((meta as any).cliMode) { fm.cliMode = (meta as any).cliMode; }
+	if ((meta as any).isolation) { fm.isolation = (meta as any).isolation; }
 
 	if (stageMeta) {
 		// Reconstruct stage structure from the flattened role nodes.
 		let offset = 0;
-		fm.stages = stageMeta.map(stage => {
+		fm.stages = stageMeta.map((stage, si) => {
 			const stageRoles = roleNodes.slice(offset, offset + stage.roleCount);
 			offset += stage.roleCount;
+			// Read live stage name/iterations from the stage node (preserves edits).
+			const stageNode = nodes.find(n => n.id === `stage-${si}`);
+			const stageData = stageNode?.data as StageNodeData | undefined;
 			const s: Record<string, unknown> = {
-				name: stage.name,
-				iterations: stage.iterations,
+				name: stageData?.stageName ?? stage.name,
+				iterations: stageData?.iterations ?? stage.iterations,
 			};
 			if (stage.skills?.length) { s.skills = stage.skills; }
 			s.roles = stageRoles.map(n => {
@@ -290,6 +352,53 @@ export function serializeFlowDoc(nodes: Node[], rawBody: string, stageMeta?: Sta
 		});
 	}
 
-	if (rawBody.trim()) { fm.sharedContext = rawBody; }
-	return yaml.dump(fm, { lineWidth: -1, noRefs: true, quotingType: '"' });
+	if (meta.sharedContext?.trim()) { fm.sharedContext = meta.sharedContext; }
+
+	// Build YAML manually so multi-line sharedContext and prompts use
+	// literal block scalars (|) instead of invalid double-quoted multiline.
+	return yamlToText(fm);
+}
+
+/** Serialize a plain JS object to YAML text, using literal block scalars for
+ *  multi-line string values. */
+function yamlToText(obj: Record<string, unknown>, indent = 0): string {
+	const pad = '  '.repeat(indent);
+	const lines: string[] = [];
+
+	for (const [key, value] of Object.entries(obj)) {
+		if (value === undefined || value === null || value === '') { continue; }
+
+		if (Array.isArray(value)) {
+			if (value.length === 0) { continue; }
+			if (value.every(v => typeof v === 'string' && !v.includes('\n'))) {
+				// Simple string array: inline YAML
+				lines.push(`${pad}${key}: [${value.map(v => JSON.stringify(v)).join(', ')}]`);
+			} else {
+				lines.push(`${pad}${key}:`);
+				for (const item of value) {
+					if (typeof item === 'string') {
+						lines.push(`${pad}  - ${JSON.stringify(item)}`);
+					} else if (typeof item === 'object' && item !== null) {
+						const sub = yamlToText(item as Record<string, unknown>, indent + 2);
+						lines.push(`${pad}  - ${sub.trimStart()}`);
+					}
+				}
+			}
+		} else if (typeof value === 'object') {
+			lines.push(`${pad}${key}:`);
+			lines.push(yamlToText(value as Record<string, unknown>, indent + 1));
+		} else if (typeof value === 'string' && (value.includes('\n') || value.length > 80)) {
+			// Multi-line or long string → literal block scalar
+			lines.push(`${pad}${key}: |`);
+			for (const line of value.split('\n')) {
+				lines.push(`${pad}  ${line}`);
+			}
+		} else if (typeof value === 'string') {
+			lines.push(`${pad}${key}: ${JSON.stringify(value)}`);
+		} else if (typeof value === 'number' || typeof value === 'boolean') {
+			lines.push(`${pad}${key}: ${value}`);
+		}
+	}
+
+	return lines.join('\n');
 }

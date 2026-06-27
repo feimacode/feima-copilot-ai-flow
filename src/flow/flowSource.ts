@@ -4,6 +4,30 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ICatalogFlow } from './catalogClient';
+import { resolveSourceUri } from './sourceUriResolver';
+
+/**
+ * Resolves a catalog source URI to a browser-friendly URL for the star button.
+ * Converts "gist:abc123" → "https://gist.github.com/abc123"
+ * Converts "github:owner/repo/path" → "https://github.com/owner/repo/blob/main/path"
+ */
+function resolveSourceUrlToUrl(sourceUri: string): string {
+	const colonIndex = sourceUri.indexOf(':');
+	if (colonIndex === -1) {
+		return '';
+	}
+
+	const scheme = sourceUri.substring(0, colonIndex);
+	const value = sourceUri.substring(colonIndex + 1);
+
+	if (scheme === 'gist') {
+		return `https://gist.github.com/${value}`;
+	} else if (scheme === 'github') {
+		return `https://github.com/${value.replace(/:/, '/blob/main/')}`;
+	}
+
+	return '';
+}
 
 /**
  * Source of a flow entry.
@@ -66,6 +90,12 @@ export interface IFlowEntry {
 
 	/** Companion prompts/agents referenced by this flow (for catalog flows) */
 	usesPrompts?: readonly string[];
+
+	/** URL to the flow's gist or GitHub repository (for star button) */
+	sourceUrl?: string;
+
+	/** Aggregate star count from catalog index */
+	starCount?: number;
 }
 
 /**
@@ -86,5 +116,10 @@ export function catalogFlowToEntry(flow: ICatalogFlow, provider: string, trust: 
 		roleCount: flow.roles,
 		usesSkills: flow.uses_skills,
 		usesPrompts: flow.uses_prompts,
+		// sourceUrl is resolved from sourceUri (e.g., "gist:abc123" → "https://gist.github.com/abc123")
+		sourceUrl: resolveSourceUrlToUrl(flow.source),
+		// starCount would be fetched from gist/github API, but for now we set to 0
+		starCount: 0,
 	};
 }
+
