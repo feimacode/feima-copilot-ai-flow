@@ -5,7 +5,7 @@
 
 import * as yaml from 'js-yaml';
 import type { Node, Edge } from '@xyflow/react';
-import type { IFlowDocument, IFlowRole, IFlowStage } from '../../src/types/flowDocument';
+import type { IFlowDocument, IFlowRole, IFlowStage, IFlowGroup } from '../../src/types/flowDocument';
 
 // ---------------------------------------------------------------------------
 // Data shapes
@@ -44,10 +44,24 @@ export interface StageNodeData extends Record<string, unknown> {
 	onEdit: () => void;
 }
 
+/** Data attached to a group container node (fork-join pattern). */
+export interface GroupNodeData extends Record<string, unknown> {
+	name: string;
+	onChange: (patch: Partial<Pick<GroupNodeData, 'name'>>) => void;
+	onEdit: () => void;
+}
+
 /** Preserved stage structure so serializeFlowDoc can reconstruct the YAML correctly. */
 export interface StageMeta {
 	name: string;
 	iterations: number;
+	skills?: unknown[];
+	roleCount: number;
+}
+
+/** Preserved group structure so serializeFlowDoc can reconstruct fork-join YAML correctly. */
+export interface GroupMeta {
+	name: string;
 	skills?: unknown[];
 	roleCount: number;
 }
@@ -66,9 +80,11 @@ const STAGE_PAD_X = 16;       // horizontal padding inside stage group
 const STAGE_PAD_Y = 12;       // vertical padding inside stage group
 const STAGE_HEADER = 44;      // height of stage group header bar
 const ROLE_HEIGHT = 100;      // rendered height of a compact role node (with 3-line preview)
-const ROLE_GAP_Y = 12;        // gap between roles inside a stage
+const ROLE_GAP_Y = 12;        // gap between roles inside a stage/group
 const STAGE_WIDTH = 272;      // ROLE_WIDTH(240) + STAGE_PAD_X(16) * 2
 const INTER_STAGE_GAP = 60;   // vertical gap between stage groups
+const GROUP_GAP_X = 40;       // horizontal gap between parallel groups
+const JOIN_GAP_Y = 60;        // vertical gap from groups to join role
 
 /** Pixel height of a stage group containing `n` roles. */
 function stageGroupHeight(n: number): number {
@@ -87,6 +103,8 @@ export interface ParseResult {
 	rawBody: string;
 	/** Present when the document uses stage-based execution. Passed back to serializeFlowDoc. */
 	stageMeta?: StageMeta[];
+	/** Present when the document uses fork-join execution. Passed back to serializeFlowDoc. */
+	groupMeta?: GroupMeta[];
 }
 
 /**
@@ -130,6 +148,13 @@ export function parseFlowDoc(content: string): ParseResult {
 	// Stage-based flow
 	if (Array.isArray(fm.stages) && fm.stages.length > 0) {
 		return buildStageGraph(nodes, edges, fm.stages as IFlowStage[], rawBody);
+	}
+
+	// Fork-join flow
+	if (Array.isArray(fm.groups) && fm.groups.length > 0) {
+		const groups = fm.groups as IFlowGroup[];
+		const join = fm.join as IFlowRole | undefined;
+		return buildForkJoinGraph(nodes, edges, groups, join, rawBody);
 	}
 
 	// Flat-role flow
@@ -245,6 +270,131 @@ function buildStageGraph(
 }
 
 /**
+ * Build React Flow nodes and edges for a fork-join flow.
+ *
+ * Layout:
+ *   - Groups are placed side-by-side horizontally (parallel lanes).
+ *   - Each group renders like a stage container: a GroupNode with child RoleNodes.
+ *   - The join role sits below all groups, centered horizontally.
+ *   - Edges: meta → each group, each group → join role.
+ */
+function buildForkJoinGraph(
+	nodes: Node[],
+	edges: Edge[],
+	groups: IFlowGroup[],
+	join: IFlowRole | undefined,
+	rawBody: string,
+): ParseResult {
+	const groupMeta: GroupMeta[] = [];
+	let globalRoleIdx = 0;
+
+	// Group metadata and actual rendered widths are collected so we can
+	// lay out adjacent groups and center the join role correctly.
+	const groupWidths: number[] = [];
+	const groupHeights: number[] = [];
+
+	let currentX = NODE_X;
+
+	for (let gi = 0; gi < groups.length; gi++) {
+		const group = groups[gi];
+		const groupRoles: IFlowRole[] = Array.isArray(group.roles) ? (group.roles as IFlowRole[]) : [];
+		const roleCount = groupRoles.length;
+
+		groupMeta.push({
+			name: String(group.name ?? `Group ${gi + 1}`),
+			skills: Array.isArray(group.skills) ? group.skills : undefined,
+			roleCount,
+		});
+
+		const groupId = `group-${gi}`;
+
+		// Build child role nodes first so we can compute group dimensions from them.
+		const childNodes: Node[] = [];
+		for (let ri = 0; ri < groupRoles.length; ri++) {
+			const role = groupRoles[ri];
+			const roleId = `role-${globalRoleIdx}`;
+			childNodes.push({
+				id: roleId,
+				type: 'roleNode',
+				parentId: groupId,
+				extent: 'parent' as const,
+				position: {
+					x: STAGE_PAD_X,
+					y: STAGE_HEADER + STAGE_PAD_Y + ri * (ROLE_HEIGHT + ROLE_GAP_Y),
+				},
+				data: {
+					name: String(role.name ?? ''),
+					prompt: String(role.prompt ?? ''),
+					model: String(role.model ?? ''),
+					index: globalRoleIdx,
+					onChange: () => { /* replaced by App */ },
+					onDelete: () => { /* replaced by App */ },
+					onEdit: () => { /* replaced by App */ },
+				} as RoleNodeData,
+			});
+			globalRoleIdx++;
+		}
+
+		const groupW = computeStageWidth(childNodes);
+		const groupH = computeStageHeight(childNodes);
+		groupWidths.push(groupW);
+		groupHeights.push(groupH);
+
+		nodes.push({
+			id: groupId,
+			type: 'groupNode',
+			position: { x: currentX, y: 0 },
+			style: { width: groupW, height: groupH },
+			data: {
+				name: groupMeta[gi].name,
+				onChange: () => { /* replaced by App */ },
+				onEdit: () => { /* replaced by App */ },
+			} as GroupNodeData,
+		});
+		nodes.push(...childNodes);
+
+		// Edge from meta to this group
+		edges.push({ id: `edge-meta-${groupId}`, source: 'meta', target: groupId, animated: true });
+
+		currentX += groupW + GROUP_GAP_X;
+	}
+
+	const tallestGroupH = groupHeights.length > 0 ? Math.max(...groupHeights) : 0;
+
+	// Build the join role node (if present)
+	if (join) {
+		const joinW = 220; // ROLE_WIDTH approximate — same as flat-role nodes
+		// Center the join role horizontally under the groups
+		const totalWidth = groupWidths.reduce((sum, w, i) => sum + w + (i > 0 ? GROUP_GAP_X : 0), 0);
+		const joinX = NODE_X + (totalWidth - joinW) / 2;
+
+		const joinId = `role-${globalRoleIdx}`;
+		nodes.push({
+			id: joinId,
+			type: 'roleNode',
+			position: { x: joinX, y: tallestGroupH + JOIN_GAP_Y },
+			data: {
+				name: String(join.name ?? 'Join'),
+				prompt: String(join.prompt ?? ''),
+				model: String(join.model ?? ''),
+				index: globalRoleIdx,
+				onChange: () => { /* replaced by App */ },
+				onDelete: () => { /* replaced by App */ },
+				onEdit: () => { /* replaced by App */ },
+			} as RoleNodeData,
+		});
+		globalRoleIdx++;
+
+		// Edges from each group to the join role
+		for (let gi = 0; gi < groups.length; gi++) {
+			edges.push({ id: `edge-group-${gi}-join`, source: `group-${gi}`, target: joinId, animated: true });
+		}
+	}
+
+	return { nodes, edges, rawBody, groupMeta };
+}
+
+/**
  * Calculate stage width based on child node extents
  */
 function computeStageWidth(children: Node[]): number {
@@ -288,10 +438,11 @@ function computeStageHeight(children: Node[]): number {
 
 /**
  * Serialize React Flow nodes back to a *.flow.yaml string.
- * Pass `stageMeta` from ParseResult to preserve stage structure on round-trip.
- * Role nodes are ordered by vertical position (top → bottom = first → last).
+ * Pass `stageMeta` or `groupMeta` from ParseResult to preserve structure on round-trip.
+ * Role nodes are ordered by vertical position (top → bottom = first → last) within
+ * their parent stage/group, or by global index for flat flows.
  */
-export function serializeFlowDoc(nodes: Node[], rawBody: string, stageMeta?: StageMeta[]): string {
+export function serializeFlowDoc(nodes: Node[], rawBody: string, stageMeta?: StageMeta[], groupMeta?: GroupMeta[]): string {
 	const metaNode = nodes.find(n => n.id === 'meta');
 	if (!metaNode) { return ''; }
 
@@ -343,6 +494,42 @@ export function serializeFlowDoc(nodes: Node[], rawBody: string, stageMeta?: Sta
 			});
 			return s;
 		});
+	} else if (groupMeta) {
+		// Reconstruct fork-join structure from the flattened role nodes.
+		// Roles are sorted by parentId (group-0, group-1, ...) then by y.
+		// The join role has no parentId.
+		const groupRoles = allRoleNodes
+			.filter(n => n.parentId !== undefined && String(n.parentId).startsWith('group-'))
+			.sort((a, b) => {
+				const ai = Number(String(a.parentId ?? '').split('-')[1] ?? 999);
+				const bi = Number(String(b.parentId ?? '').split('-')[1] ?? 999);
+				return ai !== bi ? ai - bi : a.position.y - b.position.y;
+			});
+		const joinRole = allRoleNodes.find(n => n.parentId === undefined || !String(n.parentId).startsWith('group-'));
+
+		let offset = 0;
+		fm.groups = groupMeta.map((grp, gi) => {
+			const grpRoles = groupRoles.slice(offset, offset + grp.roleCount);
+			offset += grp.roleCount;
+			const groupNode = nodes.find(n => n.id === `group-${gi}`);
+			const groupData = groupNode?.data as GroupNodeData | undefined;
+			const g: Record<string, unknown> = { name: groupData?.name ?? grp.name };
+			if (grp.skills?.length) { g.skills = grp.skills; }
+			g.roles = grpRoles.map(n => {
+				const d = n.data as RoleNodeData;
+				const r: Record<string, string> = { name: d.name, prompt: d.prompt };
+				if (d.model) { r.model = d.model; }
+				return r;
+			});
+			return g;
+		});
+
+		if (joinRole) {
+			const d = joinRole.data as RoleNodeData;
+			const j: Record<string, string> = { name: d.name, prompt: d.prompt };
+			if (d.model) { j.model = d.model; }
+			fm.join = j;
+		}
 	} else {
 		fm.roles = roleNodes.map(n => {
 			const d = n.data as RoleNodeData;

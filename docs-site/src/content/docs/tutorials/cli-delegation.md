@@ -58,6 +58,7 @@ Estimate the entire Q3 backlog (12 stories):
 With `delegate: true`, the flow starts in the background. You get a notification when it completes.
 
 <a href="vscode://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fstory-estimation.flow.yaml%0A%0AEstimate%20the%20entire%20Q3%20backlog">🚀 Run in Copilot</a>
+<a href="vscode-insiders://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fstory-estimation.flow.yaml%0A%0AEstimate%20the%20entire%20Q3%20backlog">🚀 Run in Insiders</a>
 
 ## What You Got
 

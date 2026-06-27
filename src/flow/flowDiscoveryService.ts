@@ -47,15 +47,13 @@ export class FlowDiscoveryService {
 
 	/** Scan a list of references and return the best flow-file URI. */
 	private scanRefs(refs: readonly vscode.ChatPromptReference[]): vscode.Uri | undefined {
-		let fallback: vscode.Uri | undefined;
 		for (const ref of refs) {
 			const uri = this.refToUri(ref);
 			if (!uri) { continue; }
 			const lp = uri.path.toLowerCase();
 			if (lp.endsWith('.flow.yaml') || lp.endsWith('.flow.yml')) { return uri; }
-			if (!fallback && lp.endsWith('.md')) { fallback = uri; }
 		}
-		return fallback;
+		return undefined;
 	}
 
 	/**

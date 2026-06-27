@@ -37,6 +37,7 @@ Watch as each role executes in sequence:
 3. **Verdict** synthesizes everything into critical, high, and medium priority issues
 
 <a href="vscode://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fcode-review.flow.yaml%0A%0AReview%20the%20changes%20in%20">🚀 Run in Copilot</a>
+<a href="vscode-insiders://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fcode-review.flow.yaml%0A%0AReview%20the%20changes%20in%20">🚀 Run in Insiders</a>
 
 <small>Or copy: `@flow #file:.github/flows/code-review.flow.yaml`</small>
 

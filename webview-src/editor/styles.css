@@ -179,6 +179,12 @@ body {
 	background: var(--vscode-sideBar-background, #252526);
 }
 
+.group-node {
+	border-color: var(--vscode-charts-blue, #4fc1ff);
+	border-style: dashed;
+	border-width: 1px;
+	background: var(--vscode-sideBar-background, #252526);
+}
 /* ---------------------------------------------------------------------------
    Compact node layout
 --------------------------------------------------------------------------- */
@@ -212,6 +218,10 @@ body {
 	color: #000;
 }
 
+.group-badge {
+	background: var(--vscode-charts-blue, #4fc1ff);
+	color: #000;
+}
 .compact-title {
 	flex: 1;
 	font-weight: 600;

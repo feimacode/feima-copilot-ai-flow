@@ -25,7 +25,17 @@ That's it. Three specialized reviewers analyze your code in sequence and produce
 
 ## Where to Start
 
+**New to flows?** Start with the Basics:
+- **[Hello, Flow](/tutorials/hello-world/)** — understand what a flow is in 2 minutes
+- **[Pipeline Basics](/tutorials/pipeline-basics/)** — chain three specialized roles
+
+**Ready to build?** Jump into practice:
+- **[Your First Flow](/tutorials/your-first-flow/)** — create and customize a flow from natural language
 - **[Quick Start](/getting-started/quickstart/)** — run your first flow in 60 seconds
+
+**Experienced flow author?** Level up:
+- **[Quality Gates](/tutorials/quality-gates/)** — build quality into your flows
+- **[Efficiency Patterns](/tutorials/efficiency-patterns/)** — keep flows fast and lean
+
 - **[Installation](/getting-started/installation/)** — set up the extension
-- **[Your First Flow](/tutorials/your-first-flow/)** — create and customize a flow
-- **[Guides](/guides/execution-patterns/)** — learn execution patterns and flow authoring
+- **[Guides](/guides/execution-patterns/)** — reference docs and patterns

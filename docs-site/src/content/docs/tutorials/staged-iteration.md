@@ -54,6 +54,7 @@ Story: Refactor the payment processing pipeline
 Watch the team iterate. On ambiguous stories, they may run 2-3 rounds. On clear stories, the convergence sentinel triggers after 1 round.
 
 <a href="vscode://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fstory-estimation.flow.yaml%0A%0AStory%3A%20Refactor%20the%20payment%20processing%20pipeline">🚀 Run in Copilot</a>
+<a href="vscode-insiders://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fstory-estimation.flow.yaml%0A%0AStory%3A%20Refactor%20the%20payment%20processing%20pipeline">🚀 Run in Insiders</a>
 
 ## What You Got
 

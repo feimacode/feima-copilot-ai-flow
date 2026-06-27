@@ -10,6 +10,7 @@ import type {
 	ISkillRef, IAgentRef, IContextRef, IPromptRef,
 	IsolationMode,
 } from '../types/flowDocument';
+import { ILogger } from '../platform/log/common/logService';
 
 // Re-export the types that other modules import from here.
 export type { ISkillRef, IAgentRef, IContextRef, IPromptRef } from '../types/flowDocument';
@@ -49,16 +50,34 @@ export interface IRoleResponse {
  * Service for parsing and managing flow discussions
  */
 export class FlowService {
-	
+	private readonly log: ILogger | undefined;
+
+	constructor(log?: ILogger) {
+		this.log = log;
+	}
+
 	/**
 	 * Parse a .flow.yaml file to extract flow configuration
 	 */
 	async parsePrompt(uri: vscode.Uri): Promise<IFlowConfig | undefined> {
+		const uriPath = uri.fsPath || uri.toString();
 		try {
 			// Read the file content
 			const content = await vscode.workspace.fs.readFile(uri);
 			const textContent = Buffer.from(content).toString('utf8');
-			
+
+			// Guard: check that the file extension looks like a flow file before attempting YAML parse.
+			// This catches non-flow files (e.g., .md, .ts) that might reach parsePrompt
+			// through erroneous URI resolution in flowDiscoveryService.
+			const lowerPath = uriPath.toLowerCase();
+			if (!lowerPath.endsWith('.flow.yaml') && !lowerPath.endsWith('.flow.yml')) {
+				const msg = `File is not a .flow.yaml or .flow.yml: ${uriPath}`;
+				this.log?.error(msg);
+				throw new Error(msg);
+			}
+
+			this.log?.debug(`Parsing flow file: ${uriPath}`);
+
 			// Parse pure YAML — no frontmatter delimiters
 			const header = yaml.load(textContent) as Record<string, unknown>;
 			if (typeof header !== 'object' || header === null) {
@@ -142,7 +161,9 @@ export class FlowService {
 			};
 			
 		} catch (error) {
-			throw new Error(`Failed to parse prompt: ${error instanceof Error ? error.message : String(error)}`);
+			const detail = error instanceof Error ? error.message : String(error);
+			this.log?.error(error instanceof Error ? error : String(error), `Failed to parse flow file: ${uriPath}`);
+			throw new Error(`Failed to parse flow file "${uriPath}": ${detail}`);
 		}
 	}
 	

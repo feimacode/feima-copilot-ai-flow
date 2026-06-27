@@ -47,6 +47,7 @@ Story: Add user authentication with JWT tokens
 The virtual scrum team estimates the story, then the Jira Publisher creates a ticket with the estimate, confidence level, and risk factors.
 
 <a href="vscode://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fstory-estimation.flow.yaml%0A%0AStory%3A%20Add%20user%20authentication%20with%20JWT">🚀 Run in Copilot</a>
+<a href="vscode-insiders://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fstory-estimation.flow.yaml%0A%0AStory%3A%20Add%20user%20authentication%20with%20JWT">🚀 Run in Insiders</a>
 
 ## What You Got
 

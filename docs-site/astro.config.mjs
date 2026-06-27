@@ -29,11 +29,41 @@ export default defineConfig({
 				{
 					label: 'Tutorials',
 					items: [
-						{ label: 'Your First Flow', link: '/tutorials/your-first-flow/' },
-						{ label: 'Make It Yours', link: '/tutorials/customize-flow/' },
-						{ label: 'Connect to Jira', link: '/tutorials/jira-integration/' },
-						{ label: 'Add Iteration', link: '/tutorials/staged-iteration/' },
-						{ label: 'Go Autonomous', link: '/tutorials/cli-delegation/' },
+						{
+							label: 'Basic',
+							collapsed: false,
+							items: [
+								{ label: 'Hello, Flow', link: '/tutorials/hello-world/' },
+								{ label: 'Pipeline Basics', link: '/tutorials/pipeline-basics/' },
+								{ label: 'Iteration & Convergence', link: '/tutorials/iteration-convergence/' },
+								{ label: 'Fork-Join', link: '/tutorials/fork-join/' },
+								{ label: 'Context Files', link: '/tutorials/context-files/' },
+								{ label: 'Dialog Simulator', link: '/tutorials/dialog-simulator/' },
+								{ label: 'Tool Control', link: '/tutorials/tool-control/' },
+								{ label: 'Human Gate', link: '/tutorials/human-gate/' },
+							],
+						},
+						{
+							label: 'In Practice',
+							collapsed: true,
+							items: [
+								{ label: 'Your First Flow', link: '/tutorials/your-first-flow/' },
+								{ label: 'Make It Yours', link: '/tutorials/customize-flow/' },
+								{ label: 'Connect to Jira', link: '/tutorials/jira-integration/' },
+								{ label: 'Add Iteration', link: '/tutorials/staged-iteration/' },
+								{ label: 'Go Autonomous', link: '/tutorials/cli-delegation/' },
+							],
+						},
+						{
+							label: 'Advanced',
+							collapsed: true,
+							items: [
+								{ label: 'Quality Gates', link: '/tutorials/quality-gates/' },
+								{ label: 'Efficiency Patterns', link: '/tutorials/efficiency-patterns/' },
+								{ label: 'Autonomous Design', link: '/tutorials/autonomous-design/' },
+								{ label: 'Case Study: Full-Cycle', link: '/tutorials/case-study-full-cycle/' },
+							],
+						},
 					],
 				},
 				{

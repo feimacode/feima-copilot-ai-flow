@@ -33,7 +33,7 @@ export class FlowEngine {
 		this.log = log;
 		this.promptRenderer = new FlowPromptRenderer(log.createSubLogger('Renderer'));
 		this.sdkExecutor = new CopilotSdkExecutor(log.createSubLogger('SdkExecutor'));
-		this.flowService = new FlowService();
+		this.flowService = new FlowService(log.createSubLogger('FlowService'));
 		this.contextBuilder = new FlowContextBuilder();
 		this.conversationStore = new FlowConversationStore();
 	}

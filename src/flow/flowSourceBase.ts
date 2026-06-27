@@ -62,7 +62,7 @@ export abstract class FlowSourceBase {
 	// Shared YAML metadata helpers (used by file-based sources)
 	// ------------------------------------------------------------------
 
-	/** Parse name / description / tags / category / difficulty from a
+	/** Parse name / description / tags / category / difficulty / tutorialUrl from a
 	 *  .flow.yaml file using js-yaml. */
 	protected static async parseMetadata(uri: vscode.Uri): Promise<{
 		name?: string;
@@ -72,6 +72,7 @@ export abstract class FlowSourceBase {
 		difficulty?: 'beginner' | 'intermediate' | 'advanced';
 		version?: string;
 		author?: string;
+		tutorialUrl?: string;
 	}> {
 		try {
 			const content = await vscode.workspace.fs.readFile(uri);
@@ -92,6 +93,7 @@ export abstract class FlowSourceBase {
 				difficulty,
 				version: doc.version ? String(doc.version) : undefined,
 				author: doc.author ? String(doc.author) : undefined,
+				tutorialUrl: doc.tutorialUrl ? String(doc.tutorialUrl) : undefined,
 			};
 		} catch {
 			return {};
@@ -117,6 +119,7 @@ export abstract class FlowSourceBase {
 			difficulty?: 'beginner' | 'intermediate' | 'advanced';
 			version?: string;
 			author?: string;
+			tutorialUrl?: string;
 		},
 		source: 'builtin' | 'workspace',
 		filePath: string,
@@ -130,6 +133,7 @@ export abstract class FlowSourceBase {
 			difficulty: metadata.difficulty,
 			version: metadata.version,
 			author: metadata.author,
+			tutorialUrl: metadata.tutorialUrl,
 			source,
 			filePath,
 		};

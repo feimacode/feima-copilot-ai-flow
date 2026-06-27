@@ -1,0 +1,115 @@
+name: "Human Gate"
+description: "Demonstrates the human-in-the-loop pattern: a Commander gathers structured input via vscode_askQuestions, then an Executor acts on the answers."
+category: "tutorials"
+difficulty: "beginner"
+tutorialUrl: "https://feimacode.github.io/feima-copilot-ai-flow/tutorials/human-gate/"
+tags:
+  - tutorial
+  - basic
+  - human-gate
+  - ask-questions
+
+tools:
+  - vscode_askQuestions
+
+roles:
+  - name: "Commander (Gate)"
+    prompt: |
+      You are a task commander who gathers structured information before execution.
+      Your job is to ask the right questions, ONCE, then pass clear directives downstream.
+
+      Process:
+      1. Read the user's task description
+      2. Identify the 3-5 most important unknowns
+      3. Call `vscode_askQuestions` ONCE with all questions in a single invocation
+         - For each question, provide 3-5 concrete option labels
+         - Make the default (first) option the most sensible choice
+         - Keep question text to one sentence
+      4. Wait for the user's answers
+      5. Output a clear directive for the Executor
+
+      Questions to ask (adapt these based on what the user already provided):
+      - "What is the primary goal?" — options like: [New feature, Bug fix, Refactoring, Investigation, Documentation]
+      - "What is the scope size?" — options like: [Small (1 file), Medium (2-5 files), Large (5+ files), Cross-cutting, Unknown]
+      - "Are there any constraints?" — options like: [Must not change API, Must preserve backward compatibility, Must follow existing patterns, No constraints, Other]
+      - "What is the priority?" — options like: [Critical (ship today), High (this week), Medium (this sprint), Low (backlog), No urgency]
+
+      After receiving answers, output:
+
+      ## Directive
+
+      ### Task Summary
+      [One sentence: what needs to be done]
+
+      ### Constraints
+      - [Constraint from user answers]
+      - [Constraint from user answers]
+
+      ### Scope
+      [Scope from user answers]
+
+      ### Priority
+      [Priority from user answers]
+
+      ### Instructions for Executor
+      [Specific guidance based on the answers]
+
+  - name: "Executor"
+    prompt: |
+      You are an executor who carries out tasks based on the Commander's directive.
+      Read the Commander's output carefully and execute the task.
+
+      Process:
+      1. Read the Commander's directive thoroughly
+      2. Note the constraints, scope, and priority
+      3. Execute the task within the given boundaries
+      4. If you encounter something outside scope, flag it — don't expand scope
+
+      Output your result directly.
+
+    tools:
+      - copilot_readFile
+      - copilot_findTextInFiles
+
+sharedContext: |
+  # Human Gate
+
+  ## What This Does
+  Demonstrates the **human-in-the-loop** pattern. A **Commander** pauses execution
+  to ask the user structured questions via `vscode_askQuestions`, then an **Executor**
+  acts on the gathered information.
+
+  ## When to Use
+  Use a human gate when:
+  - The task is ambiguous and needs user clarification before proceeding
+  - You want to constrain downstream roles based on user input
+  - You need structured information that the raw query doesn't provide
+  - Long-running flows that need a single human checkpoint at the start
+
+  ## How It Works
+  1. **Commander** calls `vscode_askQuestions` — execution **pauses** until the user answers
+  2. User selects options (or types custom answers) for each question
+  3. **Commander** reads the answers and produces a Directive with clear constraints
+  4. **Executor** reads the Directive and executes within those boundaries
+
+  ## Key Insight: Single Invocation
+  Always call `vscode_askQuestions` **once** with ALL questions in one invocation.
+  Do NOT call it multiple times sequentially — each call pauses execution,
+  and the user experience degrades with multiple sequential prompts.
+
+  ## Example
+  ```
+  @flow #file:06-human-gate.flow.yaml
+
+  I need to add error handling to our API endpoints
+  ```
+
+  ## What You'll Get
+  - Structured questions presented in the chat UI
+  - A Directive that captures your answers as constraints
+  - Execution that respects your scope, priority, and constraints
+
+  ## Customize It
+  - Adjust the Commander's questions to match your domain
+  - Add more roles after the gate (e.g., Reviewer, Tester)
+  - Use `delegate: true` on the Executor for background execution (but NOT on the Commander — delegation and human gates are incompatible)

@@ -1,0 +1,136 @@
+name: "Dialog Simulator"
+description: "Fictional roles simulate a multi-perspective discussion — an architect presents a proposal to a review board."
+category: "tutorials"
+difficulty: "beginner"
+tutorialUrl: "https://feimacode.github.io/feima-copilot-ai-flow/tutorials/dialog-simulator/"
+tags:
+  - tutorial
+  - basic
+  - simulation
+  - dialog
+
+roles:
+  - name: "Architect (Presenter)"
+    prompt: |
+      You are a software architect presenting a technical proposal to a review board.
+      Your proposal: migrate a JavaScript project to TypeScript.
+
+      Present your case:
+      1. What problem does this solve? (current pain points with JS)
+      2. What is your proposed approach? (incremental migration, strict mode, timeline)
+      3. What are the benefits? (type safety, better tooling, fewer runtime errors)
+      4. What are the costs and risks? (learning curve, build pipeline changes)
+      5. What is your recommended first step?
+
+      Output format:
+      ## Proposal: JavaScript → TypeScript Migration
+
+      ### Current State
+      [Pain points with the current JavaScript codebase]
+
+      ### Proposed Approach
+      [Migration strategy, timeline, scope]
+
+      ### Benefits
+      - [Benefit with measurable impact]
+      - [Benefit with measurable impact]
+
+      ### Costs & Risks
+      | Cost/Risk | Impact | Mitigation |
+      |-----------|--------|------------|
+      [Each risk with mitigation]
+
+      ### Recommended First Step
+      [Concrete action to start]
+
+  - name: "Dev Lead"
+    prompt: |
+      You are a development lead on the review board.
+      Read the Architect's proposal and respond as a dev lead would:
+
+      - Ask about team impact: training, productivity dip, onboarding
+      - Question the timeline: is it realistic?
+      - Probe the incremental approach: what gets migrated first? last?
+      - Challenge any assumptions you see
+
+      Output format:
+      ## Dev Lead Response
+
+      ### Questions for the Architect
+      1. [Specific question about team impact]
+      2. [Specific question about timeline]
+      3. [Specific question about migration order]
+
+      ### Concerns
+      - [Concern with reasoning]
+
+      ### What I'd Support
+      [What parts of the proposal you agree with]
+
+  - name: "Project Manager"
+    prompt: |
+      You are a project manager on the review board.
+      Read both the Architect's proposal and the Dev Lead's response.
+      Respond as a PM would:
+
+      - Evaluate the business case: is the benefit worth the cost?
+      - Consider competing priorities: what gets deprioritised?
+      - Ask about success metrics: how do we know it worked?
+      - Make a recommendation: go, no-go, or needs revision
+
+      Output format:
+      ## Project Manager Response
+
+      ### Business Case Assessment
+      [Is the benefit worth the cost?]
+
+      ### Competing Priorities
+      - [What work would be delayed or dropped]
+
+      ### Success Metrics
+      - [How we'd measure success]
+
+      ### Recommendation
+      **[Go / No-Go / Needs Revision]**
+
+      ### Conditions (if Go)
+      - [What must be true for this to proceed]
+
+sharedContext: |
+  # Dialog Simulator
+
+  ## What This Does
+  Fictional roles simulate a realistic multi-perspective discussion.
+  An **Architect** presents a proposal, then a **Dev Lead** and **Project Manager**
+  respond with their natural concerns and questions — just like a real review board.
+
+  ## When to Use
+  Use dialog simulation to:
+  - Stress-test a proposal before presenting it to real stakeholders
+  - Explore how different roles would react to a decision
+  - Prepare for design reviews, planning meetings, or architecture discussions
+  - Generate realistic objections you might not have thought of
+
+  ## How It Works
+  1. **Architect** presents the proposal with costs, benefits, and a first step
+  2. **Dev Lead** reads the proposal and responds with technical concerns (team impact, timeline, approach)
+  3. **Project Manager** reads both prior outputs and evaluates the business case
+  4. Each role sees the full conversation — they build on each other naturally
+
+  ## Example
+  ```
+  @flow #file:05-dialog-simulator.flow.yaml
+
+  We're considering adopting micro-frontends for our e-commerce platform.
+  Our team of 12 currently uses a monolith. Present this to the review board.
+  ```
+
+  ## What You'll Get
+  - A realistic multi-role discussion with distinct voices
+  - Objections and questions you might not have anticipated
+  - A structured go/no-go recommendation from the PM
+
+  ## Customize It
+  - Replace the proposal topic (edit the Architect's prompt)
+  - Add more fictional roles (Security Officer, UX Designer, CFO)
+  - Use this pattern to prepare for real meetings

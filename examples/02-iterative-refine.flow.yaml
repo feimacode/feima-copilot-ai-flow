@@ -1,0 +1,96 @@
+name: "Iterative Refine"
+description: "Staged iteration: Writer drafts, Critic reviews — looping up to 3 times until convergence."
+category: "tutorials"
+difficulty: "beginner"
+tutorialUrl: "https://feimacode.github.io/feima-copilot-ai-flow/tutorials/iteration-convergence/"
+tags:
+  - tutorial
+  - basic
+  - staged
+  - iteration
+
+stages:
+  - name: "Refinement Loop"
+    iterations: 3
+    roles:
+      - name: "Writer"
+        prompt: |
+          You are a writer who produces clear, well-structured content.
+          Read the user's request and produce the best output you can.
+
+          If this is your second or third attempt:
+          - Read the Critic's feedback carefully
+          - Address every point the Critic raised
+          - Explain how your revision addresses each concern
+
+          Output format:
+          ## Draft
+
+          [Your content here]
+
+          ### Revision Notes (if applicable)
+          - [How you addressed each critic concern]
+
+      - name: "Critic"
+        prompt: |
+          You are a critic who reviews writing for clarity, accuracy, and completeness.
+          Read the Writer's draft and evaluate it honestly.
+
+          If the draft meets ALL of these criteria, output ONLY the convergence sentinel:
+          <!-- flow:done -->
+
+          Criteria:
+          - Clear: a newcomer would understand it
+          - Accurate: all claims are reasonable and well-supported
+          - Complete: covers the user's request fully
+          - Concise: no filler, no repetition
+
+          If the draft does NOT meet all criteria, output:
+          ## Critique
+
+          ### What's Good
+          - [One thing that works]
+
+          ### What Needs Improvement
+          1. [Specific issue — be concrete, not vague]
+          2. [Specific issue]
+
+          ### Suggestion
+          [One actionable recommendation]
+
+sharedContext: |
+  # Iterative Refine
+
+  ## What This Does
+  A staged flow where **Writer** and **Critic** loop until the output meets
+  quality criteria. The `<!-- flow:done -->` sentinel exits early when quality
+  is sufficient.
+
+  ## When to Use
+  Use staged iteration when:
+  - Quality requires multiple passes (writing, design, estimation)
+  - You want a built-in quality gate that loops until satisfied
+  - Single-pass pipelines produce inconsistent results
+
+  ## How It Works
+  1. **Writer** produces a draft
+  2. **Critic** evaluates it against clear criteria
+  3. If the draft passes → Critic outputs `<!-- flow:done -->` and the stage ends
+  4. If not → Critic gives feedback, Writer revises, loop continues
+  5. After `iterations: 3` attempts, the stage ends regardless
+
+  ## Example
+  ```
+  @flow #file:02-iterative-refine.flow.yaml
+
+  Write a one-page proposal for migrating our monolith to microservices
+  ```
+
+  ## What You'll Get
+  - A refined output that has passed quality review
+  - Up to 3 revision rounds — exits early if quality is good
+
+  ## Customize It
+  - Adjust `iterations:` for your quality tolerance (1-5)
+  - Customize the Critic's criteria to match your standards
+  - Add more roles to the stage (e.g., Fact Checker after Critic)

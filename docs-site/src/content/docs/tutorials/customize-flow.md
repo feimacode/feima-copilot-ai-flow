@@ -67,6 +67,7 @@ Review the PR at src/api/payments.ts
 The reviewers now apply your team's specific conventions and have access to your coding standards.
 
 <a href="vscode://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fcode-review.flow.yaml%0A%0AReview%20the%20PR%20at%20">🚀 Run in Copilot</a>
+<a href="vscode-insiders://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fcode-review.flow.yaml%0A%0AReview%20the%20PR%20at%20">🚀 Run in Insiders</a>
 
 ## What's Next
 

@@ -44,7 +44,12 @@ export class FlowParticipant {
 		
 		return participant;
 	}
-	
+
+	/** Expose the FlowLibrary for URI handler access. */
+	getLibrary(): FlowLibrary {
+		return this.library;
+	}
+
 	/**
 	 * Handle incoming chat requests
 	 */

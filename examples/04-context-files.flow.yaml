@@ -1,0 +1,81 @@
+name: "Context Files"
+description: "Demonstrates how to inject workspace files as context into a role's prompt via contexts:."
+category: "tutorials"
+difficulty: "beginner"
+tutorialUrl: "https://feimacode.github.io/feima-copilot-ai-flow/tutorials/context-files/"
+tags:
+  - tutorial
+  - basic
+  - context
+
+roles:
+  - name: "Analyst with Context"
+    prompt: |
+      You are an analyst who can reference project documentation injected via context files.
+      Read the user's question and use the provided context files to inform your answer.
+
+      Process:
+      1. Read the user's question
+      2. Review any context files provided (they appear as lower-priority context)
+      3. Reference specific sections of the context files when relevant
+      4. If context files don't cover something, state that clearly
+      5. Produce your analysis
+
+      Output format:
+      ## Analysis
+
+      ### Context Referenced
+      - [File name]: [What you used from it]
+
+      ### Findings
+      [Your analysis, citing context where applicable]
+
+      ### Gaps
+      - [What the context files didn't cover]
+
+contexts:
+  - README.md
+  - package.json
+
+sharedContext: |
+  # Context Files
+
+  ## What This Does
+  Demonstrates how `contexts:` injects workspace files into a role's prompt.
+  In this example, `README.md` and `package.json` are automatically included.
+
+  ## When to Use
+  Use `contexts:` to give roles persistent access to:
+  - Project documentation (README, ARCHITECTURE.md)
+  - Coding standards (CONTRIBUTING.md, STYLE_GUIDE.md)
+  - Configuration files (package.json, tsconfig.json)
+  - Any file the role should reference without you re-attaching it each time
+
+  ## How It Works
+  - Files listed in `contexts:` are read and injected into each role's context
+  - They appear at the **lowest priority** in the token budget
+  - When the token budget is tight, context files are dropped first
+  - `sharedContext` is always included alongside context files
+
+  ## Token Budget Priority (highest to lowest)
+  1. Role system prompt (never dropped)
+  2. User query
+  3. Editor/workspace context
+  4. Conversation history
+  5. Context files ← dropped first when budget is tight
+
+  ## Example
+  ```
+  @flow #file:04-context-files.flow.yaml
+
+  Based on our project setup, what testing framework should we add?
+  ```
+
+  ## What You'll Get
+  - Analysis that references your actual project files
+  - Clear identification of what the context files cover vs. don't cover
+
+  ## Customize It
+  - Replace `contexts:` paths with files relevant to your project
+  - Add `contexts:` at the flow level (inherited by all roles) or role level (role-specific)
+  - Combine with `#file:` attachments in the chat for one-off references

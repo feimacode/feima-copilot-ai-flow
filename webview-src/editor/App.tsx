@@ -22,10 +22,11 @@ import '@xyflow/react/dist/style.css';
 
 import { RoleNode } from './nodes/RoleNode';
 import { StageNode } from './nodes/StageNode';
+import { GroupNode } from './nodes/GroupNode';
 import { NodeDialog } from './nodes/NodeDialog';
 import { parseFlowDoc, serializeFlowDoc } from '../shared/serialize';
 import { PortalTooltip } from '../shared/PortalTooltip';
-import type { MetaNodeData, RoleNodeData, StageNodeData, StageMeta } from '../shared/serialize';
+import type { MetaNodeData, RoleNodeData, StageNodeData, GroupNodeData, StageMeta, GroupMeta } from '../shared/serialize';
 
 // acquireVsCodeApi is injected into the webview context by VS Code.
 declare function acquireVsCodeApi(): {
@@ -39,6 +40,7 @@ const vscode = acquireVsCodeApi();
 const nodeTypes = {
 	roleNode: RoleNode,
 	stageNode: StageNode,
+	groupNode: GroupNode,
 };
 
 // ---------------------------------------------------------------------------
@@ -140,6 +142,24 @@ function withCallbacks(
 		};
 	}
 
+	if (node.type === 'groupNode') {
+		return {
+			...node,
+			data: {
+				...node.data,
+				onChange(patch: Partial<Pick<GroupNodeData, 'name'>>) {
+					isDirtyRef.current = true;
+					setNodes(prev =>
+						prev.map(n => n.id === node.id ? { ...n, data: { ...n.data, ...patch } } : n)
+					);
+				},
+				onEdit() {
+					setEditingNodeId(node.id);
+				},
+			},
+		};
+	}
+
 	return node;
 }
 
@@ -180,6 +200,8 @@ export function App() {
 	const rawBodyRef = useRef('');
 	/** Stage metadata preserved for round-trip serialization of stage-based flows. */
 	const stageMetaRef = useRef<StageMeta[] | undefined>(undefined);
+	/** Group metadata preserved for round-trip serialization of fork-join flows. */
+	const groupMetaRef = useRef<GroupMeta[] | undefined>(undefined);
 	/**
 	 * Fix #4: Persists finalized drag positions by node ID so they survive
 	 * incoming text-document updates. Entries for nodes that no longer exist
@@ -208,7 +230,7 @@ export function App() {
 			// Reset dirty flag before serializing so subsequent React Flow internal
 			// updates (e.g. dimension re-measurements) don't re-trigger this path.
 			isDirtyRef.current = false;
-			const content = serializeFlowDoc(nodesRef.current, rawBodyRef.current, stageMetaRef.current);
+			const content = serializeFlowDoc(nodesRef.current, rawBodyRef.current, stageMetaRef.current, groupMetaRef.current);
 			// Only post if the YAML actually changed from what we last received/sent.
 			// This prevents marking the document dirty for canvas-only changes such
 			// as node position drags that have no YAML representation.
@@ -230,9 +252,10 @@ export function App() {
 			const msg = event.data as { type: string; content: string };
 			if (msg.type !== 'update') { return; }
 
-			const { nodes: raw, edges: rawEdges, rawBody, stageMeta } = parseFlowDoc(msg.content);
+			const { nodes: raw, edges: rawEdges, rawBody, stageMeta, groupMeta } = parseFlowDoc(msg.content);
 			rawBodyRef.current = rawBody;
 			stageMetaRef.current = stageMeta;
+			groupMetaRef.current = groupMeta;
 			// Receiving an update from the host means the document is in sync — clear
 			// dirty and record the canonical content to detect future real changes.
 			isDirtyRef.current = false;

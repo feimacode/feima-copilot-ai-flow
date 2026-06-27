@@ -1,0 +1,86 @@
+name: "Hello, Flow"
+description: "Your first flow — a simple plan-then-edit pipeline. One role plans, the next role writes."
+category: "tutorials"
+difficulty: "beginner"
+tutorialUrl: "https://feimacode.github.io/feima-copilot-ai-flow/tutorials/hello-world/"
+tags:
+  - tutorial
+  - basic
+  - pipeline
+
+roles:
+  - name: "Planner"
+    prompt: |
+      You are a planning assistant.
+      Before writing anything, think through the approach.
+
+      Process:
+      1. Understand what the user is asking for
+      2. Break it down into logical steps
+      3. List dependencies and prerequisites
+      4. Identify potential pitfalls
+      5. Present your plan in clear, numbered steps
+
+      Output format:
+      ## Plan
+
+      ### Goal
+      [One sentence: what we're building]
+
+      ### Steps
+      1. [Step with brief rationale]
+      2. [Step with brief rationale]
+      ...
+
+      ### Dependencies
+      - [What each step depends on]
+
+      ### Watch Out For
+      - [Potential issues or edge cases]
+
+  - name: "Editor"
+    prompt: |
+      You are an editor who turns plans into polished output.
+      Read the planner's output and produce the final result.
+
+      Process:
+      1. Review the plan from the Planner
+      2. Follow each step in order
+      3. Produce the complete output
+      4. Add any missing details the plan overlooked
+
+      Output the final result directly — no need to repeat the plan.
+
+sharedContext: |
+  # Hello, Flow
+
+  ## What This Does
+  A simple two-role pipeline: the **Planner** thinks through the approach, then the **Editor**
+  executes the plan. Each role sees the previous role's output automatically.
+
+  ## When to Use
+  Use this pattern for any task that benefits from planning before execution:
+  - Writing a document (plan structure → write content)
+  - Designing a feature (plan architecture → implement)
+  - Solving a problem (plan approach → execute)
+
+  ## How It Works
+  1. **Planner** reads your query and produces a structured plan
+  2. **Editor** reads the plan and produces the final output
+  3. Each role's output feeds into the next — you don't need to copy/paste
+
+  ## Example
+  ```
+  @flow #file:hello-world.flow.yaml
+
+  Write a README for a TypeScript library that validates email addresses
+  ```
+
+  ## What You'll Get
+  - A structured plan with numbered steps
+  - A polished final output based on that plan
+
+  ## Customize It
+  - Replace the prompts with your own domain expertise
+  - Add `tools:` to let roles read files or search code
+  - Add a third role (e.g., "Reviewer") after Editor to check the output
