@@ -297,7 +297,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src --ext ts",
-    "package": "vsce package --allow-star-activation --no-dependencies",
+    "package": "vsce package --allow-star-activation",
     "build:vsix": "tsx build/build.ts"
   },
   "devDependencies": {

@@ -88,7 +88,7 @@ function packageVsix(version: string): string {
 
 	const vsixPath = path.join(distDir, `feima-copilot-ai-flow-${version}.vsix`);
 
-	const cmd = `npx @vscode/vsce package --allow-star-activation --no-dependencies --out "${vsixPath}"`;
+	const cmd = `npx @vscode/vsce package --allow-star-activation --out "${vsixPath}"`;
 	execSync(cmd, { cwd: PROJECT_ROOT, stdio: 'inherit' });
 
 	if (!fs.existsSync(vsixPath)) {

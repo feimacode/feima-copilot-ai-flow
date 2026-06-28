@@ -108,7 +108,6 @@ jobs:
           # Package VSIX
           npx @vscode/vsce package \
             --allow-star-activation \
-            --no-dependencies \
             --out "dist/feima-copilot-ai-flow-$VERSION.vsix"
 
           echo "✅ VSIX packaged: dist/feima-copilot-ai-flow-$VERSION.vsix"
