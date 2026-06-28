@@ -9,7 +9,13 @@ tsconfig.json
 !out/**/*.js
 !examples/**/*.flow.yaml
 IMPLEMENTATION_STATUS.md
-node_modules/**/.bin/**
+# node_modules — exclude everything, then re-include ONLY runtime deps
+# @github/copilot (281MB) is excluded — it's provided by VS Code at runtime via dynamic import()
+# js-yaml + argparse (672K) and @vscode/prompt-tsx (584K) are the only deps needed at runtime
+node_modules/**
+!node_modules/js-yaml/**
+!node_modules/argparse/**
+!node_modules/@vscode/prompt-tsx/**
 docs-site/**
 !docs-site/src/content/docs/tutorials/**/*.md
 openspec/**

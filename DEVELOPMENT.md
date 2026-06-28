@@ -269,6 +269,12 @@ This runs `build/build.ts`, which does:
 4. Generates a SHA-256 checksum
 5. Validates VSIX structure (required files present) and size (< 5 MB)
 
+> **💡 Why NOT `--no-dependencies`?** The extension uses `tsc` (not esbuild), so compiled `out/*.js`
+> files have `require()` calls that need `node_modules/` at runtime. Instead of `--no-dependencies`,
+> we use `.vscodeignore` to include only the three small runtime deps (~1.3 MB total):
+> `js-yaml`, `argparse`, and `@vscode/prompt-tsx`. The 281 MB `@github/copilot` package is excluded —
+> VS Code provides it at runtime via dynamic `import()`.
+
 Output in `dist/`:
 ```
 dist/
