@@ -14,7 +14,7 @@ You start a code review in Copilot Chat. Then you need a security perspective, s
 
 **With AI Flow**: One `@flow` command. Three specialized roles run in sequence — each building on the previous output. You get a single prioritized report. No context switching. No manual stitching.
 
-![Flow orchestration diagram showing three roles running in sequence with context flowing between them](https://raw.githubusercontent.com/feimacode/feima-copilot-ai-flow/main/docs-site/public/assets/screenshots/flow-orchestration.png)
+![Flow orchestration diagram showing three roles running in sequence with context flowing between them](https://raw.githubusercontent.com/feimacode/feima-copilot-ai-flow/main/docs-site/public/assets/screenshots/flow-demo.gif)
 
 ---
 
@@ -24,7 +24,7 @@ Solo reviews miss things. Security blind spots. Performance bottlenecks. Edge ca
 
 **With AI Flow**: The built-in Code Review flow runs Logic & Correctness, Style & Security, and a Verdict synthesizer — each with a dedicated system prompt tuned for their lens. You get depth without the scheduling headache.
 
-![Code review flow output showing prioritized findings from three perspectives](https://raw.githubusercontent.com/feimacode/feima-copilot-ai-flow/main/docs-site/public/assets/screenshots/code-review-output.png)
+![Code review flow output showing prioritized findings from three perspectives](https://raw.githubusercontent.com/feimacode/feima-copilot-ai-flow/main/docs-site/public/assets/screenshots/code-review.png)
 
 ---
 
