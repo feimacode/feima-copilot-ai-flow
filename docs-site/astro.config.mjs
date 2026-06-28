@@ -3,8 +3,8 @@ import starlight from '@astrojs/starlight';
 
 // https://starlight.astro.build/
 export default defineConfig({
-	site: 'https://feimacode.github.io',
-	base: '/feima-copilot-ai-flow',
+	site: 'https://flow-docs.feimacode.com',
+	base: '/',
 	integrations: [
 		starlight({
 			title: 'Copilot AI Flow',

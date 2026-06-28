@@ -2,7 +2,7 @@ name: "Iterative Refine"
 description: "Staged iteration: Writer drafts, Critic reviews — looping up to 3 times until convergence."
 category: "tutorials"
 difficulty: "beginner"
-tutorialUrl: "https://feimacode.github.io/feima-copilot-ai-flow/tutorials/iteration-convergence/"
+tutorialUrl: "https://flow-docs.feimacode.com/tutorials/iteration-convergence/"
 tags:
   - tutorial
   - basic

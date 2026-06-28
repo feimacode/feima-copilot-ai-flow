@@ -2,7 +2,7 @@ name: "Hello, Flow"
 description: "Your first flow — a simple plan-then-edit pipeline. One role plans, the next role writes."
 category: "tutorials"
 difficulty: "beginner"
-tutorialUrl: "https://feimacode.github.io/feima-copilot-ai-flow/tutorials/hello-world/"
+tutorialUrl: "https://flow-docs.feimacode.com/tutorials/hello-world/"
 tags:
   - tutorial
   - basic

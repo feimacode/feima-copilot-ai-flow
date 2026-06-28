@@ -1,7 +1,7 @@
 {
   "name": "copilot-ai-flow",
-  "displayName": "Feima Copilot AI Flow",
-  "description": "Multi-perspective AI discussions with configurable expert roles",
+  "displayName": "Feima AI Flow",
+  "description": "Orchestrate multiple AI roles in a single command — pipeline, iterative, or fork-join — with tool use, context injection, and a built-in library of production-ready flows for code review, sprint planning, incident response, and more",
   "version": "0.1.0",
   "publisher": "feima",
   "license": "MIT",
@@ -13,16 +13,45 @@
   "categories": [
     "AI",
     "Chat",
-    "Education"
+    "Machine Learning",
+    "Other"
   ],
   "keywords": [
     "copilot",
     "ai",
     "chat",
     "flow",
-    "discussion",
+    "orchestration",
+    "workflow",
+    "automation",
     "multi-role",
-    "collaboration"
+    "multi-agent",
+    "pipeline",
+    "code-review",
+    "sprint-planning",
+    "incident-response",
+    "refactoring",
+    "expert-panel",
+    "critical-agent",
+    "agent",
+    "prompt",
+    "yaml",
+    "opus-flow",
+    "sonnet-flow",
+    "haiku-flow",
+    "claude-flow",
+    "gpt-flow",
+    "deepseek-flow",
+    "gemini-flow",
+    "llama-flow",
+    "qwen-flow",
+    "mistral-flow",
+    "grok-flow",
+    "copilot-flow",
+    "glm-flow",
+    "kimi-flow",
+    "minimax-flow",
+    "mimo-flow"
   ],
   "repository": {
     "type": "git",
@@ -50,7 +79,7 @@
       {
         "id": "feima.copilot-ai-flow",
         "name": "flow",
-        "description": "Multi-perspective AI discussions with expert roles",
+        "description": "Orchestrate multiple AI roles in a single command — pipeline, iterative, or fork-join execution with tool use and context injection",
         "isSticky": true,
         "commands": [
           {

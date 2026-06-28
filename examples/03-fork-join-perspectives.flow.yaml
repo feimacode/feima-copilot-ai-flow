@@ -2,7 +2,7 @@ name: "Fork-Join Perspectives"
 description: "Two independent perspectives run in parallel, then a join role synthesises both into one recommendation."
 category: "tutorials"
 difficulty: "beginner"
-tutorialUrl: "https://feimacode.github.io/feima-copilot-ai-flow/tutorials/fork-join/"
+tutorialUrl: "https://flow-docs.feimacode.com/tutorials/fork-join/"
 tags:
   - tutorial
   - basic

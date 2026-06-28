@@ -2,7 +2,7 @@ name: "Pipeline Review"
 description: "Three-role pipeline: Analyst investigates, Reviewer evaluates, Summariser reports — each building on the previous."
 category: "tutorials"
 difficulty: "beginner"
-tutorialUrl: "https://feimacode.github.io/feima-copilot-ai-flow/tutorials/pipeline-basics/"
+tutorialUrl: "https://flow-docs.feimacode.com/tutorials/pipeline-basics/"
 tags:
   - tutorial
   - basic

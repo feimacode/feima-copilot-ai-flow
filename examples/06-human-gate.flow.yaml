@@ -2,7 +2,7 @@ name: "Human Gate"
 description: "Demonstrates the human-in-the-loop pattern: a Commander gathers structured input via vscode_askQuestions, then an Executor acts on the answers."
 category: "tutorials"
 difficulty: "beginner"
-tutorialUrl: "https://feimacode.github.io/feima-copilot-ai-flow/tutorials/human-gate/"
+tutorialUrl: "https://flow-docs.feimacode.com/tutorials/human-gate/"
 tags:
   - tutorial
   - basic

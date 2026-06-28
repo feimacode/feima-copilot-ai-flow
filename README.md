@@ -1,22 +1,107 @@
-# Copilot AI Flow
+# Feima AI Flow
 
-**Orchestrate multiple AI roles in a single command.** Define a team of specialized reviewers, planners, or investigators — each with their own perspective, tools, and context — and let them work together on your task. All in a versioned YAML file you own.
+**Orchestrate multiple AI roles in a single command.** Assemble a team of specialized reviewers, planners, or investigators — each with its own perspective, tools, and context — and let them work together on your task. All defined in a version-controlled `.flow.yaml` file you own.
 
 > 🚀 **[Run your first flow in 60 seconds →](#quick-start)**
 
 ---
 
+## Why AI Flow?
+
+### "I spend more time managing AI than it saves me."
+
+You start a code review in Copilot Chat. Then you need a security perspective, so you start over in a new chat. Then a performance review — another chat. You're copy-pasting context, repeating yourself, and stitching results together by hand.
+
+**With AI Flow**: One `@flow` command. Three specialized roles run in sequence — each building on the previous output. You get a single prioritized report. No context switching. No manual stitching.
+
+![Flow orchestration diagram showing three roles running in sequence with context flowing between them](https://raw.githubusercontent.com/feimacode/feima-copilot-ai-flow/main/docs-site/public/assets/screenshots/flow-orchestration.png)
+
+---
+
+### "Code reviews are shallow when I'm the only reviewer."
+
+Solo reviews miss things. Security blind spots. Performance bottlenecks. Edge cases you didn't think of. But getting multiple human reviewers for every PR isn't realistic.
+
+**With AI Flow**: The built-in Code Review flow runs Logic & Correctness, Style & Security, and a Verdict synthesizer — each with a dedicated system prompt tuned for their lens. You get depth without the scheduling headache.
+
+![Code review flow output showing prioritized findings from three perspectives](https://raw.githubusercontent.com/feimacode/feima-copilot-ai-flow/main/docs-site/public/assets/screenshots/code-review-output.png)
+
+---
+
+### "PR descriptions are an afterthought — and it shows."
+
+You merge a 400-line change with a one-line description. Future you (and your teammates) will suffer. But writing detailed PR descriptions feels like overhead when you just want to ship.
+
+**With AI Flow**: Point the PR Description flow at your branch. A Code Historian figures out intent, an Impact Assessor surfaces breaking changes, and a PR Writer composes a description reviewers actually want to read.
+
+![Visual flow editor showing a PR description pipeline](https://raw.githubusercontent.com/feimacode/feima-copilot-ai-flow/main/docs-site/public/assets/screenshots/visual-editor.png)
+
+---
+
+### "Incidents are chaos. Everyone has a theory, nobody has a process."
+
+Alert fires. Slack explodes with guesses. The loudest voice (HiPPO) drives the investigation — not the data. Hours later you find the real root cause was something nobody checked.
+
+**With AI Flow**: Paste the alert into the War-Room Triage flow. It runs parallel investigations across application, infrastructure, and data layers — then synthesizes findings into a structured report. Process over panic.
+
+---
+
+### "Sprint planning eats half a day. Every. Single. Sprint."
+
+You gather the team. Debate story points. Re-rank the backlog. Negotiate dependencies. Half a day gone — and half the estimates are still wrong.
+
+**With AI Flow**: The Story Estimation flow runs a virtual scrum team (Product Owner, Dev Lead, QA Lead) against your stories. Backlog Ranking orders them across business value, risk, dependencies, and effort. Two flows. Full planning loop. Minutes, not hours.
+
+![Flow gallery showing built-in planning flows](https://raw.githubusercontent.com/feimacode/feima-copilot-ai-flow/main/docs-site/public/assets/screenshots/flow-gallery.png)
+
+---
+
+### "My tests pass. My coverage is fine. Production still breaks."
+
+You wrote tests for the happy path and the obvious error cases. But the model you used didn't hunt for adversarial edge cases — nulls in nested objects, race conditions, Unicode in unexpected places.
+
+**With AI Flow**: The Test Writing flow generates tests in two passes. First pass: standard coverage. Second pass: an adversarial Edge Case Hunter actively looks for gaps the first pass missed. Consistently better coverage than single-prompt generation.
+
+---
+
+### "I want to automate, but I don't want a black box."
+
+No-code automation tools hide the logic. Prompt chains in SaaS products lock you into a platform. You want automation you can version, review, and own.
+
+**With AI Flow**: Every flow is a `.flow.yaml` file checked in alongside your code. Plain text. Version-controlled. Reviewable in PRs. Sharable across teams. You own the orchestration logic — not a vendor.
+
+```yaml
+# code-review.flow.yaml — owned by your team, versioned in your repo
+name: Code Review
+description: Multi-lens review: correctness, security, style
+category: "software-development"
+roles:
+  - name: Logic & Correctness
+    prompt: |
+      You are a senior engineer. Review for logical errors, edge cases, and correctness.
+  - name: Style & Security
+    prompt: |
+      Review for code style violations and OWASP Top 10 security issues.
+  - name: Verdict
+    prompt: |
+      Synthesize findings into a prioritized, actionable review.
+```
+
+---
+
 ## Quick Start
 
-```bash
+Install the extension, then type in Copilot Chat:
+
+```
 @flow #file:code-review.flow.yaml
 
 Review the changes in src/auth/login.ts
 ```
 
-That's it. The flow runs three specialized reviewers — Logic & Correctness, Style & Security, and a Verdict synthesizer — each building on the previous output. You get a prioritized review with actionable findings.
+That's it. Three specialized reviewers run in sequence — each building on the previous output. You get a prioritized review with actionable findings.
 
-**No setup, no configuration.** The built-in library has flows ready to run:
+**No setup, no configuration.** The built-in library has production-ready flows:
 
 | Flow | What It Does | Try It |
 |------|-------------|--------|
@@ -31,259 +116,98 @@ Click any "Run in Copilot" button to open VS Code with the command pre-filled. O
 
 ---
 
-## What You Can Do
+## How It Works
 
-### 🔍 Multi-Perspective Review
-Run the same code through a security reviewer, a performance reviewer, and a synthesis role in one command. Each role sees prior output and builds on it — no more switching contexts between separate prompts.
+### Define Roles, Not Just Prompts
 
-### 📋 Sprint Planning, Automated
-Estimate stories with a virtual scrum team (Product Owner, Dev Lead, QA Lead, and more). Rank your backlog across business value, technical risk, dependencies, and effort. Two flows that cover your full planning loop.
+Each role in a flow is a fully-configured AI agent with its own system prompt, tools, and context. Roles run in sequence — each sees the output of previous roles and builds on it.
 
-### 🚨 Incident Response Under Pressure
-Paste an alert. The flow runs parallel investigations across application, infrastructure, and data layers — then synthesizes findings. No more HiPPO-driven debugging.
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Security       │     │  Performance    │     │  Synthesis      │
+│  Reviewer       │ ──▶ │  Reviewer       │ ──▶ │  (Lead Engineer) │
+│                 │     │                 │     │                 │
+│  • OWASP focus  │     │  • Bottleneck   │     │  • Prioritize   │
+│  • Severity     │     │    hunting      │     │  • Risk rating  │
+│    scoring      │     │  • Scalability  │     │  • Action plan  │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
 
-### 📝 PR Descriptions That Don't Suck
-Feed it your diff. The Code Historian figures out intent, the Impact Assessor finds breaking changes, and the PR Writer composes a description reviewers actually want to read.
+### Three Orchestration Patterns
 
-### 🧪 Tests That Catch Edge Cases
-Generate tests with an adversarial Edge Case Hunter that finds gaps the first pass misses. Consistently better coverage than single-prompt generation.
+| Pattern | Use When | YAML Config |
+|---------|----------|-------------|
+| **Pipeline** | Sequential review, each role building on prior output | `roles:` |
+| **Iterative** | Refinement loops — run until quality converges | `stages:` + `iterations` |
+| **Fork-Join** | Parallel investigations merged by a synthesizer | `groups:` + `join:` |
 
-### 🔄 Iterative Refinement
-Wrap roles in stages with `iterations` to loop until a convergence sentinel is emitted. Replace manual back-and-forth with automated iteration.
+### Built-in Tool Use
 
-### 🤖 Autonomous Background Execution
-Hand off long-running flows to the GitHub Copilot SDK for unattended execution with optional worktree isolation.
+Roles can read files, search your codebase, and run terminals — all within the flow execution. Give each role exactly the tools it needs:
+
+```yaml
+tools:
+  - copilot_readFile
+  - copilot_findTextInFiles
+  # or "*" for all available tools
+```
+
+Omit `tools` entirely for conversation-only roles.
+
+### Smart Context Management
+
+Attach files via `#file:` in chat or declare them in your flow with `contexts:`. Context files are injected at lower priority — the token budget is never wasted, and critical prompts always fit.
+
+---
+
+## Discover & Customize
+
+| Command | What It Does |
+|---|---|
+| `@flow /browse` | Open the interactive flow gallery with previews |
+| `@flow /list` | List all built-in flows grouped by category |
+| `@flow /search <query>` | Find flows by name, tag, or category |
+| `@flow /install <id>` | Copy a built-in flow into your workspace to customize |
+
+### Built-in Categories
+
+- **Software Development** — Code Review, PR Description, Test Writing, SDD Full Cycle
+- **Planning** — Story Estimation, Backlog Ranking
+- **Operations** — Incident Triage, War-Room Response
+- **Design & UX** — Design Critiques, Accessibility Audits
+- **Creative** — Brainstorming, Story Development
+- **Education** — Tutoring, Concept Exploration
 
 ---
 
 ## Features
 
-- 🔀 **Flow Orchestration**: Pipeline, staged iteration, or fork-join — choose the pattern that fits
-- 🎭 **Multi-Role Discussions**: Each role has its own system prompt, tools, and context
-- 📎 **Context Injection**: Attach files via `#file:` or flow `contexts:` — injected at lower priority so the token budget is never wasted
-- 🧠 **Progressive Disclosure**: Token-budget-aware rendering drops low-priority content gracefully
-- 🛠️ **Tool Use**: Roles call VS Code tools (read files, search codebase, run terminals) with a full tool-execution loop
-- 📚 **Built-in Library**: Production flows for code review, sprint planning, incident response, and more
-- 🔍 **Discoverable**: `@flow /search <query>` and `@flow /install <id>` to find and copy flows
+- 🔀 **Pipeline, Iterative & Fork-Join orchestration** — pick the pattern that fits your workflow
+- 🎭 **Multi-role discussions** — each role gets its own system prompt, tools, and context window
+- 🧠 **Progressive disclosure** — token-budget-aware rendering keeps critical content in frame
+- 🛠️ **Full tool-use loop** — roles call VS Code tools (files, search, terminal) autonomously
+- 📎 **Context injection** — attach files via `#file:` or flow `contexts:`, managed for budget
+- 📚 **Production-ready library** — flows for code review, sprint planning, incident response, and more
+- 🔍 **Discoverable** — `@flow /search` and `@flow /browse` to find the right flow fast
+- 🎨 **Visual editor** — React Flow canvas for viewing and editing flows visually
+- 🤖 **Background execution** — hand off long-running flows to the GitHub Copilot SDK
+- 📄 **Version-controlled** — `.flow.yaml` files are plain text, checked in, reviewable in PRs
 
 ---
 
-## Flow File Format
+## Requirements
 
-Flows are `.flow.yaml` files — versioned, reviewable, and checked in alongside your code:
-
-```yaml
-name: Architecture Review
-description: Expert review from multiple engineering perspectives
-category: "software-development"
-difficulty: "beginner"
-tools:
-  - copilot_readFile
-  - copilot_findTextInFiles
-
-roles:
-  - name: Security Reviewer
-    prompt: |
-      You are a security-focused architect. Review for OWASP Top 10 risks.
-      Output findings with severity, location, and remediation.
-
-  - name: Performance Reviewer
-    prompt: |
-      You are a performance engineer. Identify bottlenecks and scalability concerns.
-      Output findings with impact assessment and optimization suggestions.
-
-  - name: Synthesis
-    prompt: |
-      You are a lead engineer. Synthesize all findings into a prioritized action plan.
-      Include effort estimates and risk ratings for each recommendation.
-```
-
-### Execution Patterns
-
-| Pattern | YAML Key | Behavior |
-|---------|----------|----------|
-| **Pipeline** | `roles:` | Sequential — each role sees prior output |
-| **Iterative** | `stages:` | Loop up to N iterations, exit on `<!-- flow:done -->` |
-| **Fork-Join** | `groups:` + `join:` | Parallel branches merged by a join role |
-
-### Context & Tools
-
-```yaml
-contexts:
-  - docs/architecture.md       # injected as lower-priority context for all roles
-  - docs/adr/                  # directory of ADRs
-
-tools:
-  - copilot_readFile           # specific tools
-  - copilot_findTextInFiles
-  - "*"                        # OR: wildcard for all available tools
-```
-
-Omit `tools` for conversation-only mode. Context files can also be attached in chat via `#file:` or drag-and-drop.
-
----
-
-## Built-in Library
-
-| Command | Description |
-|---|---|
-| `@flow /list` | List all built-in flows grouped by category |
-| `@flow /search <query>` | Filter by name, tag, or category |
-| `@flow /browse` | Full gallery with metadata and preview |
-| `@flow /install <id>` | Copy a flow to `.github/flows/` in your workspace |
-
-### Categories
-
-- **Software Development**: Code review, PR descriptions, test writing, SDD full cycle
-- **Planning**: Story estimation, backlog ranking
-- **Operations**: Incident triage, war-room response
-- **Design & UX**: Design critiques, accessibility audits
-- **Education**: Tutoring, concept exploration
-- **Creative**: Brainstorming, story development
+- **VS Code** 1.85 or later
+- **GitHub Copilot Chat** extension (pre-installed in VS Code)
+- **Feima Copilot More LLMs** (bundled as extension pack — provides enhanced model selection)
 
 ---
 
 ## For Developers
 
-### Build & Test
+See [DEVELOPMENT.md](DEVELOPMENT.md) for build instructions, project structure, architecture, release process, and coding conventions.
 
-```bash
-npm install
-npm run compile        # tsc + esbuild webview bundle → out/
-npm test               # vitest run (unit specs: src/**/*.spec.ts)
-npm run test:watch     # vitest watch mode
-npm run lint           # eslint src/ --ext ts
-```
-
-### Project Structure
-
-```
-src/
-  extension.ts              # Activation entry point
-  flow/                     # Flow participant, service, library
-  prompts/                  # Prompt-TSX components
-  context/                  # Context resolution
-  types/                    # IFlowConfig, IFlowRole, IFlowStage
-  util/                     # Tool normalization, filtering
-  ui/                       # Webview panels (React + @xyflow/react)
-  commands/                 # VS Code command handlers
-schemas/
-  flow.schema.json          # JSON Schema for *.flow.yaml validation
-examples/                   # Example .flow.yaml files
-src/docs/                   # Internal docs (architecture, roadmap, engine reference)
-docs-site/                  # User-facing documentation site (Astro + Starlight)
-```
-
-### Tech Stack
-
-- **TypeScript** (strict mode) with tabs for indentation
-- **Prompt-TSX** (`@vscode/prompt-tsx`) for prompt rendering
-- **React + @xyflow/react** for the flow editor webview
-- **Vitest** for unit testing
-- **ESBuild** for webview bundling
-
-### Documentation Site
-
-A user-facing documentation site is available in `docs-site/`:
-
-```bash
-cd docs-site
-npm install
-npm run dev      # Local development server at http://localhost:4321
-npm run build    # Build static site to docs-site/dist/
-npm run preview  # Preview built site locally
-```
-
-**Deployment**: The site automatically deploys to GitHub Pages via the `.github/workflows/docs-deploy.yml` workflow on pushes to `main` that affect `docs-site/`.
-
-**Content**: Tutorials, guides, and reference documentation for users. Engine-internal docs remain in `src/docs/` for contributors.
-
-### Releasing & Publishing
-
-#### Build VSIX locally
-
-```bash
-npm run build:vsix
-```
-
-This compiles the extension, packages a VSIX into `dist/`, generates a SHA-256 checksum, and validates the output. The resulting files:
-
-```
-dist/
-├── feima-copilot-ai-flow-{version}.vsix
-└── feima-copilot-ai-flow-{version}.vsix.sha256
-```
-
-#### Release to GitHub
-
-The release pipeline is **tag-triggered**. To create a new release:
-
-1. Bump the version and update `CHANGELOG.md`:
-
-```bash
-npm version patch  # or minor / major
-```
-
-This updates `package.json`, creates a git tag, and commits. Push with the tag:
-
-```bash
-git push --follow-tags
-```
-
-The `.github/workflows/release.yml` workflow will:
-- Validate the version matches `package.json`
-- Compile and package the VSIX
-- Generate a SHA-256 checksum
-- Create a GitHub Release with the VSIX and checksum attached
-
-You can also trigger the workflow manually via the **Actions → Release → Run workflow** with a version input.
-
-#### Publish to Marketplace
-
-After a GitHub Release exists, publish to the VS Code Marketplace:
-
-1. Go to **Actions → Publish to Marketplace → Run workflow**
-2. Enter the version (e.g., `0.1.0`)
-3. Type `PUBLISH` as the confirmation string
-
-The `.github/workflows/publish-marketplace.yml` workflow will:
-- Verify the GitHub Release and VSIX exist
-- Download the VSIX and verify its checksum
-- Publish to the VS Code Marketplace at `feima.copilot-ai-flow`
-
-**Requires**: A `VSCE_PAT` secret configured in the repository (Azure DevOps personal access token with Marketplace publish scope).
-
-#### End-to-End Flow
-
-```
-git tag vX.Y.Z → git push origin vX.Y.Z
-        │
-        ▼
-  release.yml (auto)
-        │
-        ├─ validate version
-        ├─ compile + package
-        ├─ checksum
-        └─ GitHub Release
-                │
-                │ (manual trigger)
-                ▼
-  publish-marketplace.yml
-        │
-        ├─ download VSIX
-        ├─ verify checksum
-        └─ vsce publish → Marketplace
-```
-
-### Coding Conventions
-
-- `PascalCase` for types/classes/enums; `camelCase` for functions, methods, variables
-- Double quotes for user-visible strings; single quotes for internal
-- Arrow functions preferred; no parentheses on single-parameter arrows
-- Curly braces always required for `if`/`for`/`while` bodies
-- Disposables registered immediately after creation via `DisposableStore`
-
-See [AGENTS.md](AGENTS.md) for the full developer reference.
+See [AGENTS.md](AGENTS.md) for the AI assistant reference.
 
 ---
 

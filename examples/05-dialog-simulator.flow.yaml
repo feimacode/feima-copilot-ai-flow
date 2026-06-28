@@ -2,7 +2,7 @@ name: "Dialog Simulator"
 description: "Fictional roles simulate a multi-perspective discussion — an architect presents a proposal to a review board."
 category: "tutorials"
 difficulty: "beginner"
-tutorialUrl: "https://feimacode.github.io/feima-copilot-ai-flow/tutorials/dialog-simulator/"
+tutorialUrl: "https://flow-docs.feimacode.com/tutorials/dialog-simulator/"
 tags:
   - tutorial
   - basic
