@@ -77,8 +77,8 @@ export function activate(context: vscode.ExtensionContext) {
 		)
 	);
 
-	// Register all commands
-	registerCommands(context, logService);
+	// Register all commands — pass the library so install buttons can work directly
+	registerCommands(context, logService, participant.getLibrary());
 
 	logService.info('Copilot AI Flow extension activated successfully');
 }

@@ -216,7 +216,7 @@ export class FlowEngine {
 			}
 			
 			if (response.model) {
-				stream.markdown(`*<sub>Model: ${response.model}</sub>*\n\n`);
+				stream.markdown(`**Model: ${response.model}**\n\n`);
 			}
 			stream.markdown('---\n\n');
 		}
@@ -337,7 +337,7 @@ export class FlowEngine {
 						stream.markdown('\n\n');
 					}
 					if (response.model) {
-						stream.markdown(`*<sub>Model: ${response.model}</sub>*\n\n`);
+						stream.markdown(`**Model: ${response.model}**\n\n`);
 					}
 					stream.markdown('---\n\n');
 
@@ -445,7 +445,7 @@ export class FlowEngine {
 						stream.markdown('\n\n');
 					}
 					if (response.model) {
-						stream.markdown(`*<sub>Model: ${response.model}</sub>*\n\n`);
+						stream.markdown(`**Model: ${response.model}**\n\n`);
 					}
 					stream.markdown('---\n\n');
 				}
@@ -506,7 +506,7 @@ export class FlowEngine {
 			stream.markdown('\n\n');
 		}
 		if (joinResponse.model) {
-			stream.markdown(`*<sub>Model: ${joinResponse.model}</sub>*\n\n`);
+			stream.markdown(`**Model: ${joinResponse.model}**\n\n`);
 		}
 		stream.markdown('---\n\n');
 

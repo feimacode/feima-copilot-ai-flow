@@ -11,6 +11,7 @@ tsconfig.json
 IMPLEMENTATION_STATUS.md
 node_modules/**/.bin/**
 docs-site/**
+!docs-site/src/content/docs/tutorials/**/*.md
 openspec/**
 .github/**
 build/**

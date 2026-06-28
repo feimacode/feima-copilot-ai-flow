@@ -450,7 +450,7 @@ export class FlowService {
 			}
 			
 			if (response.model) {
-				output += `*<sub>Model: ${response.model}</sub>*\n\n`;
+				output += `**Model: ${response.model}**\n\n`;
 			}
 			
 			output += '---\n\n';

@@ -100,6 +100,14 @@
             "name": "install",
             "description": "Copy a built-in flow to your workspace",
             "sampleRequest": "sdd-spec-kit"
+          },
+          {
+            "name": "tutorial",
+            "description": "Browse the built-in tutorial pages for flow authoring and concepts"
+          },
+          {
+            "name": "gallery",
+            "description": "Open the Flow Gallery UI as an editor panel"
           }
         ]
       }
@@ -167,6 +175,26 @@
         "title": "Run Flow",
         "category": "AI Flow",
         "icon": "$(play)"
+      },
+      {
+        "command": "feima.copilot-ai-flow.tutorialPage",
+        "title": "Open Tutorial Page",
+        "category": "AI Flow"
+      },
+      {
+        "command": "feima.copilot-ai-flow.installAndRun",
+        "title": "Install and Run Flow",
+        "category": "AI Flow"
+      },
+      {
+        "command": "feima.copilot-ai-flow.installAndOpen",
+        "title": "Install and Open Flow",
+        "category": "AI Flow"
+      },
+      {
+        "command": "feima.copilot-ai-flow.openGalleryFlow",
+        "title": "Open Flow from Gallery",
+        "category": "AI Flow"
       }
     ],
     "keybindings": [

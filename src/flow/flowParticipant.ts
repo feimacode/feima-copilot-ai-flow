@@ -22,6 +22,27 @@ export class FlowParticipant {
 	private readonly library: FlowLibrary;
 	private readonly discoveryService: FlowDiscoveryService;
 
+	/** Ordered tutorial pages — markdown files inside docs-site/src/content/docs/tutorials/. */
+	private static readonly _tutorialPages = [
+		{ file: 'hello-world.md', title: 'Hello, Flow' },
+		{ file: 'your-first-flow.md', title: 'Your First Flow' },
+		{ file: 'pipeline-basics.md', title: 'Pipeline Basics' },
+		{ file: 'customize-flow.md', title: 'Make It Yours' },
+		{ file: 'tool-control.md', title: 'Tool Control' },
+		{ file: 'staged-iteration.md', title: 'Add Iteration' },
+		{ file: 'iteration-convergence.md', title: 'Iteration & Convergence' },
+		{ file: 'fork-join.md', title: 'Fork-Join' },
+		{ file: 'context-files.md', title: 'Context Files' },
+		{ file: 'efficiency-patterns.md', title: 'Efficiency Patterns' },
+		{ file: 'quality-gates.md', title: 'Quality Gates' },
+		{ file: 'human-gate.md', title: 'Human Gate' },
+		{ file: 'dialog-simulator.md', title: 'Dialog Simulator' },
+		{ file: 'cli-delegation.md', title: 'Go Autonomous' },
+		{ file: 'autonomous-design.md', title: 'Autonomous Design' },
+		{ file: 'jira-integration.md', title: 'Connect to Jira' },
+		{ file: 'case-study-full-cycle.md', title: 'Case Study: Full-Cycle Flow Design' },
+	];
+
 	constructor(private readonly context: vscode.ExtensionContext, log: ILogger) {
 		const engineLog = log.createSubLogger('FlowEngine');
 		const discoveryLog = log.createSubLogger('Discovery');
@@ -116,8 +137,12 @@ export class FlowParticipant {
 				return this.handleRefresh(stream, token);
 			case 'status':
 				return this.handleStatus(stream, token);
+			case 'tutorial':
+				return this.handleTutorial(request.prompt, stream);
+			case 'gallery':
+				return this.handleGallery(stream);
 			default:
-				stream.markdown(`Unknown command \`/${request.command}\`. Available commands: \`/search\`, \`/list\`, \`/browse\`, \`/install\`, \`/create\`, \`/enhance\`, \`/refresh\`, \`/status\`.`);
+				stream.markdown(`Unknown command \`/${request.command}\`. Available commands: \`/search\`, \`/list\`, \`/browse\`, \`/install\`, \`/create\`, \`/enhance\`, \`/refresh\`, \`/status\`, \`/tutorial\`, \`/gallery\`.`);
 				return {};
 		}
 	}
@@ -180,7 +205,16 @@ export class FlowParticipant {
 			if (meta.length) {
 				stream.markdown(meta.join(' · ') + '\n\n');
 			}
-			stream.markdown(`📥 Install: \`@flow /install ${f.id}\`\n\n---\n\n`);
+			// Clickable action buttons
+			if (f.filePath) {
+				const fileUri = vscode.Uri.file(f.filePath);
+				stream.button({ command: 'vscode.openWith', arguments: [fileUri, 'feima.copilot-ai-flow.flowEditor'], title: `📂 Open ${f.name}` });
+			} else if (f.source === 'catalog') {
+				stream.button({ command: 'feima.copilot-ai-flow.openGalleryFlow', arguments: [f.id], title: `📂 Open ${f.name}` });
+			}
+			stream.button({ command: 'feima.copilot-ai-flow.installAndRun', arguments: [f.id], title: `▶ Run ${f.name}` });
+			// Divider between flows
+			stream.markdown(`\n\n---\n\n`);
 		}
 		return {};
 	}
@@ -210,15 +244,24 @@ export class FlowParticipant {
 		for (const [category, flows] of grouped) {
 			stream.markdown(`### ${category}\n\n`);
 			for (const f of flows) {
-				stream.markdown(`- **${f.name}** (\`${f.id}\`)`);
+				const srcBadge = f.source === 'catalog' ? '📦' : f.source === 'workspace' ? '📁' : '🏠';
+				stream.markdown(`- ${srcBadge} **${f.name}** (\`${f.id}\`)`);
 				if (f.description) {
 					stream.markdown(` — ${f.description}`);
 				}
-				stream.markdown('\n');
+				// Inline clickable actions on the same line before the divider
+				stream.markdown(' ');
+				if (f.filePath) {
+					const fileUri = vscode.Uri.file(f.filePath);
+					stream.button({ command: 'vscode.openWith', arguments: [fileUri, 'feima.copilot-ai-flow.flowEditor'], title: `📂 Open` });
+				} else if (f.source === 'catalog') {
+					stream.button({ command: 'feima.copilot-ai-flow.installAndOpen', arguments: [f.id], title: `📂 Open` });
+				}
+				// Divider between flows
+				stream.markdown('\n\n---\n\n');
 			}
-			stream.markdown('\n');
 		}
-		stream.markdown('---\n\n💡 Use `@flow /search <query>` to filter, or `@flow /install <id>` to copy a flow to your workspace.');
+		stream.markdown('💡 Use `@flow /search <query>` to filter, or `@flow /install <id>` to copy a flow to your workspace.\n\n💡 Use `@flow /gallery` to open the visual gallery.');
 		return {};
 	}
 
@@ -243,6 +286,8 @@ export class FlowParticipant {
 		}
 
 		stream.markdown(`# Flow Gallery\n\n${all.length} flows available.\n\n`);
+		stream.button({ command: 'feima.copilot-ai-flow.browse', title: '🖼 Open Visual Gallery' });
+		stream.markdown('\n\n---\n\n');
 		for (const [category, flows] of grouped) {
 			stream.markdown(`## ${category}\n\n`);
 			for (const f of flows) {
@@ -284,7 +329,15 @@ export class FlowParticipant {
 				if (badges.length) {
 					stream.markdown(badges.join(' · ') + '\n\n');
 				}
-				stream.markdown(`\`@flow /install ${f.id}\`\n\n`);
+				// Clickable action buttons on the same line
+				if (f.filePath) {
+					const fileUri = vscode.Uri.file(f.filePath);
+					stream.button({ command: 'vscode.openWith', arguments: [fileUri, 'feima.copilot-ai-flow.flowEditor'], title: `📂 Open in Editor` });
+				} else if (f.source === 'catalog') {
+					stream.button({ command: 'feima.copilot-ai-flow.installAndOpen', arguments: [f.id], title: `📂 Open in Editor` });
+				}
+				// Divider between flows
+				stream.markdown('\n\n---\n\n');
 			}
 		}
 		return {};
@@ -342,6 +395,94 @@ export class FlowParticipant {
 			}
 		}
 		return {};
+	}
+
+	/** `/tutorial [page]` — browse the extension's built-in tutorial pages. */
+	private async handleTutorial(
+		prompt: string,
+		stream: vscode.ChatResponseStream
+	): Promise<vscode.ChatResult> {
+		const arg = prompt.trim();
+		let pageIndex = 0;
+
+		if (arg) {
+			const parsed = parseInt(arg, 10);
+			if (!isNaN(parsed) && parsed >= 1 && parsed <= FlowParticipant._tutorialPages.length) {
+				pageIndex = parsed - 1;
+			} else {
+				// Fuzzy match by title
+				const lower = arg.toLowerCase();
+				const found = FlowParticipant._tutorialPages.findIndex(
+					p => p.title.toLowerCase().includes(lower) || p.file.toLowerCase().includes(lower)
+				);
+				if (found >= 0) {
+					pageIndex = found;
+				}
+			}
+		}
+
+		const page = FlowParticipant._tutorialPages[pageIndex];
+		const content = await this._readTutorialPage(page.file);
+
+		const totalPages = FlowParticipant._tutorialPages.length;
+		const progressPct = Math.round(((pageIndex + 1) / totalPages) * 100);
+
+		stream.markdown(`# 📖 Tutorial — ${page.title}\n\n`);
+		stream.markdown(`${content}\n\n`);
+		stream.markdown(`---\n\n`);
+		stream.markdown(`📄 **Page ${pageIndex + 1} of ${totalPages}** (${progressPct}%)\n\n`);
+
+		// Navigation buttons
+		if (pageIndex > 0) {
+			const prev = FlowParticipant._tutorialPages[pageIndex - 1];
+			stream.button({ command: 'feima.copilot-ai-flow.tutorialPage', arguments: [pageIndex - 1], title: `⬅ ${prev.title}` });
+		}
+		if (pageIndex < totalPages - 1) {
+			const next = FlowParticipant._tutorialPages[pageIndex + 1];
+			stream.button({ command: 'feima.copilot-ai-flow.tutorialPage', arguments: [pageIndex + 1], title: `${next.title} ➡` });
+		}
+
+		return {};
+	}
+
+	/** `/gallery` — open the Flow Gallery UI panel automatically. */
+	private async handleGallery(
+		stream: vscode.ChatResponseStream
+	): Promise<vscode.ChatResult> {
+		// Auto-open the gallery panel immediately
+		await vscode.commands.executeCommand('feima.copilot-ai-flow.browse');
+
+		stream.markdown('🖼 Flow Gallery opened in the editor area.\n\n');
+		stream.markdown('Use the gallery to browse, preview, and install flows with one click.');
+		return {};
+	}
+
+	/** Read a tutorial page from the docs-site tutorials directory, stripping YAML frontmatter and HTML. */
+	private async _readTutorialPage(filename: string): Promise<string> {
+		const docUri = vscode.Uri.joinPath(this.context.extensionUri, 'docs-site', 'src', 'content', 'docs', 'tutorials', filename);
+		try {
+			const bytes = await vscode.workspace.fs.readFile(docUri);
+			let raw = Buffer.from(bytes).toString('utf8');
+			// Strip YAML frontmatter (--- … ---) if present
+			if (raw.startsWith('---')) {
+				const endIdx = raw.indexOf('---', 3);
+				if (endIdx !== -1) {
+					raw = raw.substring(endIdx + 3).trimStart();
+				}
+			}
+			// Sanitize HTML — the chat panel renders Markdown but not raw HTML.
+			// 1) Remove <img> tags and their enclosing <a> wrappers (screenshots)
+			raw = raw.replace(/<a\s[^>]*><img[\s\S]*?<\/a>\n?/gi, '');
+			// 2) Convert actionable <a> links to Markdown: [text](url)
+			raw = raw.replace(/<a\s+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, '[$2]($1)');
+			// 3) <br> → newline
+			raw = raw.replace(/<br\s*\/?>/gi, '\n');
+			// 4) <small>, <kbd>, <sup>, <sub>, <mark>, <ins>, <del>, <abbr> → strip tags, keep inner text
+			raw = raw.replace(/<\/?(?:small|kbd|sup|sub|mark|ins|del|abbr)[^>]*>/gi, '');
+			return raw;
+		} catch {
+			return `_Unable to load tutorial page: ${filename}_`;
+		}
 	}
 
 	/** `/refresh` — force refresh the catalog from GitHub. */

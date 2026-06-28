@@ -5,9 +5,10 @@
 
 import * as vscode from 'vscode';
 import { GalleryViewProvider } from '../ui/galleryViewProvider';
+import { FlowLibrary } from '../flow/flowLibrary';
 import { ILogService } from '../platform/log/common/logService';
 
-export function registerCommands(context: vscode.ExtensionContext, logService: ILogService) {
+export function registerCommands(context: vscode.ExtensionContext, logService: ILogService, library: FlowLibrary) {
 	
 	// Browse gallery
 	context.subscriptions.push(
@@ -280,6 +281,80 @@ export function registerCommands(context: vscode.ExtensionContext, logService: I
 		})
 	);
 
+	// Install flow then open chat to run it — used by browse/list buttons
+	context.subscriptions.push(
+		vscode.commands.registerCommand('feima.copilot-ai-flow.installAndRun', async (flowId: string) => {
+			if (!flowId) { return; }
+			const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+			if (!workspaceFolder) {
+				vscode.window.showErrorMessage('Please open a workspace first');
+				return;
+			}
+
+			const result = await _ensureInstalled(flowId, library, workspaceFolder);
+			if (!result) { return; }
+
+			// Run the flow
+			const relPath = vscode.workspace.asRelativePath(result.dest);
+			await vscode.commands.executeCommand('workbench.action.chat.open', {
+				query: `@flow #file:${relPath} `
+			});
+		})
+	);
+
+	// Install and open in editor — used by browse/list buttons
+	context.subscriptions.push(
+		vscode.commands.registerCommand('feima.copilot-ai-flow.installAndOpen', async (flowId: string) => {
+			if (!flowId) { return; }
+			const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+			if (!workspaceFolder) {
+				vscode.window.showErrorMessage('Please open a workspace first');
+				return;
+			}
+
+			const result = await _ensureInstalled(flowId, library, workspaceFolder);
+			if (!result) { return; }
+
+			// Open in visual editor
+			try {
+				await vscode.commands.executeCommand('vscode.openWith', result.dest, 'feima.copilot-ai-flow.flowEditor');
+			} catch {
+				await vscode.commands.executeCommand('vscode.openWith', result.dest, 'default');
+			}
+		})
+	);
+
+	// Open catalog flow (install and then open) — used by search result buttons
+	context.subscriptions.push(
+		vscode.commands.registerCommand('feima.copilot-ai-flow.openGalleryFlow', async (flowId: string) => {
+			if (!flowId) { return; }
+			const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+			if (!workspaceFolder) {
+				vscode.window.showErrorMessage('Please open a workspace first');
+				return;
+			}
+
+			const result = await _ensureInstalled(flowId, library, workspaceFolder);
+			if (!result) { return; }
+
+			// Open in visual editor
+			try {
+				await vscode.commands.executeCommand('vscode.openWith', result.dest, 'feima.copilot-ai-flow.flowEditor');
+			} catch {
+				await vscode.commands.executeCommand('vscode.openWith', result.dest, 'default');
+			}
+		})
+	);
+
+	// Navigate to a specific tutorial page via chat
+	context.subscriptions.push(
+		vscode.commands.registerCommand('feima.copilot-ai-flow.tutorialPage', async (pageIndex: number) => {
+			await vscode.commands.executeCommand('workbench.action.chat.open', {
+				query: `@flow /tutorial ${pageIndex + 1}`
+			});
+		})
+	);
+
 	// Run flow — open chat with @flow #file:<path>
 	context.subscriptions.push(
 		vscode.commands.registerCommand('feima.copilot-ai-flow.runFlow', async (uri?: vscode.Uri) => {
@@ -321,4 +396,44 @@ export function registerCommands(context: vscode.ExtensionContext, logService: I
 			});
 		})
 	);
+}
+
+/** Look up a flow and install it to .github/flows/ if not already present. */
+async function _ensureInstalled(
+	flowId: string,
+	library: FlowLibrary,
+	workspaceFolder: vscode.WorkspaceFolder,
+): Promise<{ dest: vscode.Uri } | undefined> {
+	const entry = await library.find(flowId);
+	if (!entry) {
+		vscode.window.showErrorMessage(`Flow "${flowId}" not found.`);
+		return undefined;
+	}
+
+	const targetFolder = vscode.Uri.joinPath(workspaceFolder.uri, '.github', 'flows');
+	const destUri = vscode.Uri.joinPath(targetFolder, `${entry.id}.flow.yaml`);
+
+	// Check if already installed
+	let alreadyInstalled = false;
+	try {
+		await vscode.workspace.fs.stat(destUri);
+		alreadyInstalled = true;
+	} catch { /* not installed yet */ }
+
+	if (alreadyInstalled) {
+		return { dest: destUri };
+	}
+
+	// Install via the library
+	try {
+		const { dest } = await library.install(entry, targetFolder);
+		return { dest };
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		// User cancelled overwrite or install failed
+		if (!msg.includes('Installation cancelled')) {
+			vscode.window.showErrorMessage(`Failed to install flow: ${msg}`);
+		}
+		return undefined;
+	}
 }
