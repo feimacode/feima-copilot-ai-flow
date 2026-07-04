@@ -1,20 +1,32 @@
 {
   "name": "copilot-ai-flow",
-  "displayName": "Feima AI Flow",
-  "description": "Orchestrate multiple AI roles in a single command — pipeline, iterative, or fork-join — with tool use, context injection, and a built-in library of production-ready flows for code review, sprint planning, incident response, and more",
+  "displayName": "AI Flow - Multi-Agent Orchestration",
+  "description": "Multi-role AI orchestration in VS Code — pipeline, iterative, & fork-join workflows with built-in flows for code review, sprint planning, and incident response",
   "version": "0.1.4",
   "publisher": "feima",
   "license": "MIT",
   "icon": "assets/icon.png",
+  "galleryBanner": {
+    "color": "#1e1e2e",
+    "theme": "dark"
+  },
+  "homepage": "https://flow-docs.feimacode.com",
+  "bugs": "https://github.com/feimacode/feima-copilot-ai-flow/issues",
+  "badges": [
+    {
+      "url": "https://img.shields.io/github/license/feimacode/feima-copilot-ai-flow",
+      "href": "https://github.com/feimacode/feima-copilot-ai-flow/blob/main/LICENSE",
+      "description": "MIT License"
+    }
+  ],
+  "pricing": "Free",
   "engines": {
     "vscode": "^1.85.0",
     "node": ">=22.0.0"
   },
   "categories": [
     "AI",
-    "Chat",
-    "Machine Learning",
-    "Other"
+    "Chat"
   ],
   "keywords": [
     "copilot",
@@ -24,34 +36,14 @@
     "orchestration",
     "workflow",
     "automation",
-    "multi-role",
     "multi-agent",
     "pipeline",
     "code-review",
-    "sprint-planning",
-    "incident-response",
-    "refactoring",
-    "expert-panel",
-    "critical-agent",
-    "agent",
-    "prompt",
     "yaml",
-    "opus-flow",
-    "sonnet-flow",
-    "haiku-flow",
-    "claude-flow",
-    "gpt-flow",
-    "deepseek-flow",
-    "gemini-flow",
-    "llama-flow",
-    "qwen-flow",
-    "mistral-flow",
-    "grok-flow",
-    "copilot-flow",
-    "glm-flow",
-    "kimi-flow",
-    "minimax-flow",
-    "mimo-flow"
+    "prompt",
+    "agent",
+    "incident-response",
+    "sprint-planning"
   ],
   "repository": {
     "type": "git",
@@ -104,6 +96,24 @@
           {
             "name": "tutorial",
             "description": "Browse the built-in tutorial pages for flow authoring and concepts"
+          },
+          {
+            "name": "create",
+            "description": "Create a new flow from a natural language description",
+            "sampleRequest": "a code review with separate security and style lenses"
+          },
+          {
+            "name": "enhance",
+            "description": "Enhance an existing flow with new capabilities",
+            "sampleRequest": "--add-jira-integration"
+          },
+          {
+            "name": "refresh",
+            "description": "Refresh the flow catalog from GitHub"
+          },
+          {
+            "name": "status",
+            "description": "Show catalog health and metadata"
           },
           {
             "name": "gallery",

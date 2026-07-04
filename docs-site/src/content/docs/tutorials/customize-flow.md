@@ -72,3 +72,9 @@ The reviewers now apply your team's specific conventions and have access to your
 ## What's Next
 
 Now that your flow is customized, [connect it to Jira](/tutorials/jira-integration/) to automatically create tickets from review findings.
+
+
+---
+
+<a href="https://marketplace.visualstudio.com/items?itemName=feima.copilot-ai-flow" style="display: inline-block; background: #0078d4; color: #fff; padding: 10px 24px; border-radius: 6px; font-weight: 600; text-decoration: none;">⬇ Install AI Flow from the VS Code Marketplace</a>
+

@@ -1,0 +1,2217 @@
+# AI Flow — Multi-Agent Orchestration for VS Code: Complete Documentation
+
+> Multi-agent AI orchestration inside VS Code. Define workflows as version-controlled YAML
+> files, run autonomous tool-using agents, get consistent repeatable results.
+>
+> Install: https://marketplace.visualstudio.com/items?itemName=feima.copilot-ai-flow
+> Source: https://github.com/feimacode/feima-copilot-ai-flow
+> Docs:  https://flow-docs.feimacode.com
+
+---
+---
+# tutorials › autonomous-design
+
+## Two Execution Paths
+
+Every role has two possible execution paths:
+
+| Path | Mechanism | Behavior | Best for |
+|------|-----------|----------|----------|
+| VS Code LM API | Default | Interactive, shows output in chat, user watches | Quick flows, real-time feedback, human gates |
+| Delegation | `delegate: true` | Background, runs unattended, notification on completion | Long-running flows, batch processing, autonomous work |
+
+```yaml
+roles:
+  - name: "Interactive Role"
+    prompt: Review this code...
+    # no delegate — runs in chat, you see output live
+
+  - name: "Autonomous Role"
+    prompt: Write comprehensive tests...
+    delegate: true    # runs in background, you get notified when done
+```
+
+## When to Delegate
+
+Delegate when the flow takes more than 2-3 minutes or you want to keep working while it runs.
+
+| Task | Duration | Delegate? |
+|------|----------|-----------|
+| Code review | 30-60 sec | No — watch it |
+| Write tests for 1 file | 1-2 min | Optional |
+| Estimate 12 backlog items | 5-10 min | Yes |
+| Full SDD cycle (spec → code → tests) | 10-20 min | Yes |
+| Multi-file refactoring | 5-15 min | Yes |
+
+**Rule of thumb:** If you'd switch tabs and do something else, delegate.
+
+## Worktree Isolation
+
+When `delegate: true` is combined with `isolation: worktree`, the delegated role runs in a separate Git worktree:
+
+```yaml
+groups:
+  - name: "Feature Team"
+    isolation: worktree      # isolated workspace
+    roles:
+      - name: "Developer"
+        delegate: true        # autonomous + isolated = safe
+```
+
+**Why isolate?**
+- File changes don't affect your working directory
+- Multiple autonomous roles can run simultaneously without conflicts
+- You can review changes before merging them
+
+**Real example:** `cli-autonomous-worktree.flow.yaml` — Feature Team and Test Team each get isolated worktrees so they can create files independently without conflicts.
+
+## The Gate-Delegation Tension
+
+Human gates (`vscode_askQuestions`) and delegation are incompatible:
+
+```
+vscode_askQuestions: "Pause and ask the user a question"
+delegate: true:       "Run in the background with no user"
+
+These can't both be true for the same role.
+```
+
+**The solution: compose them.** Gate first (interactive), then delegate (background):
+
+```yaml
+roles:
+  - name: "Commander"
+    prompt: |
+      Call vscode_askQuestions to gather requirements...
+    # NO delegate — user answers questions
+
+  - name: "Executor"
+    prompt: |
+      Execute based on the Commander's directive...
+    delegate: true        # runs in background after gate completes
+```
+
+**Real example:** `sdd-openspec-full-cycle.flow.yaml` — the Requirements Clarifier runs interactively (human gate), then the remaining stages can be delegated for autonomous background execution.
+
+## Designing for Autonomy
+
+A flow designed for autonomy needs:
+
+1. **Clear input** — either from a human gate or a very specific user query. Autonomous roles can't ask for clarification.
+
+2. **Self-contained output** — the role should produce a complete, usable result. No "let me know if you want me to continue."
+
+3. **Error handling in prompts** — autonomous roles should know what to do when tools fail or expected files don't exist.
+
+4. **Convergence or cap** — staged autonomous flows must have `<!-- flow:done -->` sentinels or `iterations:` caps. No infinite loops in the background.
+
+```yaml
+# Good autonomous role design
+- name: "Autonomous Developer"
+  delegate: true
+  prompt: |
+    You are an autonomous developer. You will NOT receive
+    additional instructions after starting.
+
+    If you encounter an error:
+    1. Try an alternative approach
+    2. If that fails, document the error and move on
+    3. NEVER stop and wait for instructions
+
+    Output a complete implementation. Do not ask follow-up questions.
+```
+
+## What You Learned
+
+- `delegate: true` routes execution to background — use for long-running tasks
+- Worktree isolation prevents delegated changes from affecting your workspace
+- Human gates and delegation are incompatible on the same role — compose them sequentially
+- Autonomous roles need clear input, self-contained output, and error handling
+
+## Next Steps
+
+Final tutorial: [Case Study](/tutorials/case-study-full-cycle/) — walk through designing a complete flow, seeing every pattern composed.
+
+---
+# tutorials › case-study-full-cycle
+
+## The Challenge
+
+> "I want to go from a vague feature idea to a merged PR without leaving the chat."
+
+That's the problem `sdd-openspec-full-cycle.flow.yaml` solves. This case study walks through every major design decision — why staged, not pipeline? Why a critic, not just more iterations? Why skills, not inline prompts?
+
+## Decision 1: Why Staged?
+
+The full cycle has four distinct phases. Each phase has different goals, different roles, and different quality criteria:
+
+```
+Stage 1: Clarification      Stage 2: Requirements      Stage 3: Implementation     Stage 4: Archive
+───────────────────────     ──────────────────────     ───────────────────────     ──────────────
+Human gate only             Analyst + Critic loop       Scaffold + Implement        Cleanup
+Iterations: 1               Iterations: 2               Multiple roles              Final step
+```
+
+**Why not pipeline?** A pipeline would execute all roles in one sequence. But the Clarification stage MUST complete before Requirements can start — if the human hasn't answered questions, the Requirements Analyst has nothing to work with. Stages create hard checkpoints.
+
+**Why not fork-join?** The stages are sequential by nature — Requirements depends on Clarification output, Implementation depends on Requirements output. Fork-join requires independent work.
+
+**Decision:** `stages:` with 4 stages. Each stage is a logical checkpoint.
+
+## Decision 2: Why a Single Human Gate at the Front?
+
+The only mandatory human interaction is at Stage 1 — the Requirements Clarifier asks 4-6 high-value questions and produces a Preliminary Scope Boundary.
+
+**Why only one gate?** Multiple gates degrade UX. The user's mental model is "I describe my idea, answer a few questions, then the flow runs." Adding gates between stages breaks the autonomous experience.
+
+**Why at the front?** The answers to clarification questions cascade through ALL downstream stages. The Requirements Analyst uses them. The Architect uses them. The Implementer uses them. One gate at the start is sufficient.
+
+**Decision:** Single `vscode_askQuestions` call in Stage 1. All downstream stages run without interruption.
+
+## Decision 3: Why a Critic Loop in Requirements?
+
+Stage 2 (Requirements) uses `iterations: 2` with an Analyst + Critic loop. The Critic validates:
+
+- Every functional requirement has priority AND size
+- Non-functional requirements are present and measurable
+- Constraints are documented
+- Out-of-scope items are explicit
+
+**Why not just `iterations: 3` without a critic?** More iterations without a critic means the Analyst revises its own work. Self-review is less effective than dedicated review. The Critic provides a fresh perspective on the same output.
+
+**Why not a separate stage for the critic?** The Critic's feedback is only useful to the Analyst. A separate stage would pass Critic output to the next stage (Architecture) — that output is irrelevant there. Keeping them in the same stage scopes the loop correctly.
+
+**Decision:** Single stage with Analyst + Critic, `iterations: 2`.
+
+## Decision 4: Why Skills, Not Inline Prompts?
+
+The flow uses 4 skills:
+
+```yaml
+skills:
+  - sdd-terminology
+  - openspec-propose
+  - openspec-apply-change
+  - openspec-archive-change
+```
+
+These inject domain knowledge (SDD concepts, OpenSpec workflows) into every role without copying it into every prompt.
+
+**What if we used inline prompts instead?** Each of the 6+ roles would need to include SDD terminology definitions and OpenSpec workflow instructions. That's hundreds of duplicated lines — massive context bloat and a maintenance nightmare (change one thing, update 6 prompts).
+
+**Why not just put it in `sharedContext`?** `sharedContext` is flow-level context, not domain knowledge. It's for "this specific flow's purpose and usage." Skills are for "knowledge that persists across flows."
+
+**Decision:** Skills for domain knowledge, `sharedContext` for flow documentation, inline prompts for role-specific instructions.
+
+## Decision 5: Which Tools and Where?
+
+The flow uses 7 tools — but not all roles get all tools:
+
+| Stage | Tools | Rationale |
+|-------|-------|-----------|
+| Clarification | `vscode_askQuestions` | Only needs to ask questions |
+| Requirements | `copilot_readFile`, `copilot_findTextInFiles` | Reads existing code/docs for context |
+| Implementation | `copilot_readFile`, `copilot_createFile`, `copilot_replaceString`, `copilot_listDirectory`, `run_in_terminal` | Full creation + build verification |
+| Archive | `copilot_readFile`, `copilot_findTextInFiles`, `run_in_terminal` | Reads artifacts, runs archive commands |
+
+**Why not give all tools to all roles?** The Requirements Analyst doesn't need `copilot_createFile` or `run_in_terminal` — giving them those tools wastes context window. Each stage gets only what it actually uses.
+
+**Decision:** Stage-scoped tool sets. Minimal per stage.
+
+## The Full Picture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  sdd-openspec-full-cycle                                     │
+│                                                              │
+│  Stage 1: Clarification (iterations: 1)                       │
+│  ┌──────────────────────────────────────────────────────┐    │
+│  │ [Requirements Clarifier 🔴]                           │    │
+│  │   vscode_askQuestions                                │    │
+│  │   → Preliminary Scope Boundary                       │    │
+│  └──────────────────────────────────────────────────────┘    │
+│                          ↓                                    │
+│  Stage 2: Requirements (iterations: 2)                        │
+│  ┌──────────────────────────────────────────────────────┐    │
+│  │ [Requirements Analyst] ⇄ [Requirements Critic]        │    │
+│  │   copilot_readFile         validates completeness     │    │
+│  │   → Requirements Spec                                │    │
+│  └──────────────────────────────────────────────────────┘    │
+│                          ↓                                    │
+│  Stage 3: Implementation                                     │
+│  ┌──────────────────────────────────────────────────────┐    │
+│  │ [Architect] → [Scaffolder] → [Implementer] → [Tests]  │    │
+│  │   design       creates       writes        writes    │    │
+│  │               files          code          tests     │    │
+│  └──────────────────────────────────────────────────────┘    │
+│                          ↓                                    │
+│  Stage 4: Archive                                            │
+│  ┌──────────────────────────────────────────────────────┐    │
+│  │ [Archiver]                                             │    │
+│  │   archives OpenSpec change, updates docs               │    │
+│  └──────────────────────────────────────────────────────┘    │
+│                                                              │
+│  Skills: sdd-terminology, openspec-propose,                   │
+│          openspec-apply-change, openspec-archive-change        │
+└──────────────────────────────────────────────────────────────┘
+```
+
+## Design Principles Recap
+
+1. **Stages create checkpoints** — use when phases depend on previous phase completion
+2. **Single human gate at the front** — gather all ambiguity before autonomous execution
+3. **Critic loops validate quality** — fresh perspective beats self-review
+4. **Skills for domain knowledge** — inject once, reuse everywhere
+5. **Minimal tools per stage** — only what each phase actually uses
+6. **Convergence caps** — `iterations:` caps prevent infinite loops
+
+## What You Learned
+
+- The full decision chain behind a complex production flow
+- How patterns compose: gates + critics + staged iteration + skills + tool strategy
+- When to choose each primitive based on the problem, not the feature list
+
+You've completed the advanced tutorials. You now understand flows from "hello world" through full-cycle autonomous design.
+
+---
+# tutorials › cli-delegation
+
+## What You'll Build
+
+Configure a flow to run autonomously via the GitHub Copilot SDK — delegating long-running estimation or review sessions to background execution.
+
+## When to Delegate
+
+| Mode | Best For |
+|------|----------|
+| **VS Code LM API** | Interactive flows, quick reviews, real-time feedback |
+| **CLI Delegation** | Long-running estimation, batch reviews, unattended execution |
+
+## Step 1: Add Delegate Annotations
+
+Edit the flow to add `delegate: true` to roles that can run autonomously:
+
+```yaml
+roles:
+  - name: "Product Owner"
+    prompt: |
+      You are the Product Owner...
+    delegate: true       # runs via Copilot SDK
+
+  - name: "Dev Lead"
+    prompt: |
+      You are the Dev Lead...
+    delegate: true
+```
+
+Or enhance it:
+
+```
+@flow /enhance story-estimation.flow.yaml --add-cli-delegation
+```
+
+## Step 2: Understand Worktree Isolation
+
+When `delegate: true` is set, the Copilot SDK can optionally create a separate Git worktree for the flow execution. This means:
+
+- The flow runs in an isolated environment
+- File changes don't affect your working directory
+- You can continue working while the flow runs
+- Results are available when the flow completes
+
+## Step 3: Run in Background
+
+```
+@flow #file:.github/flows/story-estimation.flow.yaml
+
+Estimate the entire Q3 backlog (12 stories):
+- [paste backlog items]
+```
+
+With `delegate: true`, the flow starts in the background. You get a notification when it completes.
+
+<a href="vscode://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fstory-estimation.flow.yaml%0A%0AEstimate%20the%20entire%20Q3%20backlog">🚀 Run in Copilot</a>
+<a href="vscode-insiders://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fstory-estimation.flow.yaml%0A%0AEstimate%20the%20entire%20Q3%20backlog">🚀 Run in Insiders</a>
+
+## What You Got
+
+- Long-running flows that don't block your editor
+- Optional worktree isolation for safety
+- Batch processing (estimate 12 stories at once, review 5 PRs in sequence)
+
+## You've Completed the Tutorial Chain
+
+You now know how to:
+1. [Create flows](/tutorials/your-first-flow/) from natural language
+2. [Customize roles](/tutorials/customize-flow/) for your team
+3. [Integrate with tools](/tutorials/jira-integration/) like Jira
+4. [Add iteration](/tutorials/staged-iteration/) for consensus
+5. [Delegate to CLI](/tutorials/cli-delegation/) for autonomous execution
+
+**What to explore next:**
+- [Choosing Execution Patterns](/guides/execution-patterns/) — when to use pipeline vs. staged vs. fork-join
+- [Flow Authoring Concepts](/guides/flow-authoring/) — how to design effective roles
+- [Tool Integration](/guides/tool-integration/) — MCPs, APIs, and external services
+
+---
+# tutorials › context-files
+
+## What You'll Build
+
+A flow that automatically reads your project's `README.md` and `package.json` and uses them as context — no need to attach them every time you run the flow.
+
+## The Problem
+
+Without `contexts:`, you'd type `#file:README.md` in every chat message. With `contexts:`, the files are injected automatically — every run, every role.
+
+```yaml
+contexts:
+  - README.md            # always available
+  - docs/architecture.md  # always available
+roles:
+  - name: "Analyst"
+    prompt: |            # can reference context files
+      Read the user's question and use the provided context files...
+```
+
+## Step 1: Install and Open
+
+```
+@flow /install 04-context-files
+```
+
+Open `.github/flows/04-context-files.flow.yaml`. Notice the `contexts:` list at the flow level:
+
+<a href="vscode://feima.copilot-ai-flow/open?flow=04-context-files">🔧 Open in Editor</a>
+<a href="vscode-insiders://feima.copilot-ai-flow/open?flow=04-context-files">🔧 Open in Insiders</a>
+
+```yaml
+contexts:
+  - README.md
+  - package.json
+```
+
+Files listed here are read and injected into every role's context. The role prompts can reference them — the content is already available.
+
+## Step 2: Understand Token Budget
+
+Context files don't come for free. Every file you list consumes token budget. When the budget is tight, the system drops elements in this order:
+
+| Priority | Element | Dropped? |
+|----------|---------|----------|
+| 1000 | Role system prompt | Never |
+| 950 | User query | Never |
+| 900 | Editor / workspace context | Rarely |
+| 700 | Conversation history | Sometimes |
+| 600 | Context files | **First to go** |
+
+**Rule of thumb**: Include files the role genuinely needs. Don't dump your entire `docs/` folder — be selective.
+
+## Step 3: sharedContext vs. contexts:
+
+| | `sharedContext` | `contexts:` |
+|---|---|---|
+| What it is | Inline text in the YAML | File paths on disk |
+| When to use | Short, stable instructions (< 1 page) | Longer reference docs, standards, configs |
+| Example | "Use TypeScript strict mode" | `docs/coding-standards.md` |
+| Persists? | Lives in the flow file | Reads from workspace on each run |
+
+Use `sharedContext` for short, flow-specific guidance. Use `contexts:` for documents you maintain separately.
+
+## Step 4: Run with Context
+
+```
+@flow #file:.github/flows/04-context-files.flow.yaml
+
+Based on our project setup, what testing framework should we add?
+```
+
+<a href="vscode://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2F04-context-files.flow.yaml%0A%0ABased%20on%20our%20project%20setup%2C%20what%20testing%20framework%20should%20we%20add%3F">🚀 Run in Copilot</a>
+<a href="vscode-insiders://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2F04-context-files.flow.yaml%0A%0ABased%20on%20our%20project%20setup%2C%20what%20testing%20framework%20should%20we%20add%3F">🚀 Run in Insiders</a>
+
+<small>Or copy: `@flow #file:.github/flows/04-context-files.flow.yaml`</small>
+
+<a href="../../assets/screenshots/context-files-output.png" target="_blank" title="Click to enlarge"><img src="../../assets/screenshots/context-files-output.png" alt="Role output referencing context files from the workspace" /></a>
+
+The Analyst sees your actual `README.md` and `package.json`, references specific sections, and flags what the context files don't cover.
+
+## Where Context Files Are Inherited
+
+Context files declared at different levels are **merged** — lower levels inherit from higher levels:
+
+```yaml
+contexts:                           # flow level — all roles get these
+  - docs/architecture.md
+roles:
+  - name: "Security Reviewer"
+    contexts:                       # role level — this role ALSO gets these
+      - docs/security-checklist.md
+```
+
+The Security Reviewer gets BOTH files. Other roles get only `architecture.md`.
+
+## What You Got
+
+- Persistent context injection without re-attaching files
+- Understanding of token budget priority — context files drop first
+- Knowing when to use `contexts:` vs. `sharedContext`
+
+## Next Steps
+
+Learn [dialog simulation](/tutorials/dialog-simulator/) — create multi-persona conversations.
+
+---
+# tutorials › customize-flow
+
+## What You'll Do
+
+Take the generated code review flow and customize it for your team's conventions, coding standards, and review checklist.
+
+## Step 1: Open the Flow File
+
+Open `.github/flows/code-review.flow.yaml` in VS Code. The file has YAML syntax highlighting and schema validation (from `flow.schema.json`).
+
+## Step 2: Customize Role Prompts
+
+Edit the **Style & Security Reviewer** prompt to include your team's specific standards:
+
+```yaml
+- name: "Style & Security Reviewer"
+  prompt: |
+    You are a code reviewer specializing in style and security.
+
+    Our team conventions:
+    - Use TypeScript strict mode
+    - Prefer functional components over class components
+    - All user-facing strings must use the i18n framework
+    - API routes must validate input with zod schemas
+
+    Analyze for:
+    - Security vulnerabilities (OWASP Top 10)
+    - Compliance with team conventions above
+    - Input validation and sanitization
+    ...
+```
+
+## Step 3: Add Context Files
+
+Add a `contexts:` field pointing to your team's coding standards:
+
+```yaml
+contexts:
+  - docs/coding-standards.md
+  - docs/security-guidelines.md
+```
+
+These files are automatically injected as lower-priority context for every role. They persist across runs — no need to re-attach them each time.
+
+## Step 4: Adjust Tools
+
+If your reviewers need more tools:
+
+```yaml
+tools:
+  - copilot_readFile
+  - copilot_findTextInFiles
+  - copilot_replaceString    # enables suggesting fixes inline
+```
+
+## Step 5: Run Your Customized Flow
+
+```
+@flow #file:.github/flows/code-review.flow.yaml
+
+Review the PR at src/api/payments.ts
+```
+
+The reviewers now apply your team's specific conventions and have access to your coding standards.
+
+<a href="vscode://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fcode-review.flow.yaml%0A%0AReview%20the%20PR%20at%20">🚀 Run in Copilot</a>
+<a href="vscode-insiders://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fcode-review.flow.yaml%0A%0AReview%20the%20PR%20at%20">🚀 Run in Insiders</a>
+
+## What's Next
+
+Now that your flow is customized, [connect it to Jira](/tutorials/jira-integration/) to automatically create tickets from review findings.
+
+---
+# tutorials › dialog-simulator
+
+## What You'll Build
+
+A flow where fictional roles simulate a real discussion — an **Architect** presents a proposal to a review board, then a **Dev Lead** and **Project Manager** respond with their natural concerns.
+
+```
+[Architect] → [Dev Lead] → [Project Manager]
+  presents      questions      evaluates business case
+```
+
+## Why Simulate Dialogs?
+
+Before presenting a proposal to real stakeholders, stress-test it with AI personas. They'll surface objections you hadn't considered, ask questions from angles you don't normally think from, and help you prepare for the real meeting.
+
+This pattern works for:
+- Architecture review boards
+- Sprint planning discussions
+- Design critiques
+- Risk assessment panels
+- Any multi-stakeholder decision
+
+## Step 1: Install and Open
+
+```
+@flow /install 05-dialog-simulator
+```
+
+Open `.github/flows/05-dialog-simulator.flow.yaml`. Notice that each role has a **persona** and a **perspective**:
+
+<a href="vscode://feima.copilot-ai-flow/open?flow=05-dialog-simulator">🔧 Open in Editor</a>
+<a href="vscode-insiders://feima.copilot-ai-flow/open?flow=05-dialog-simulator">🔧 Open in Insiders</a>
+
+```yaml
+- name: "Architect (Presenter)"
+  prompt: |
+    You are a software architect presenting a technical proposal...
+- name: "Dev Lead"
+  prompt: |
+    You are a development lead on the review board...
+- name: "Project Manager"
+  prompt: |
+    You are a project manager on the review board...
+```
+
+The "You are..." framing makes each role adopt a specific voice and concerns.
+
+## Step 2: Run the Simulation
+
+The example flow simulates a JavaScript-to-TypeScript migration proposal:
+
+```
+@flow #file:.github/flows/05-dialog-simulator.flow.yaml
+
+We're considering adopting micro-frontends for our e-commerce platform.
+Our team of 12 currently uses a monolith. Present this to the review board.
+```
+
+<a href="vscode://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2F05-dialog-simulator.flow.yaml%0A%0AWe're%20considering%20adopting%20micro-frontends%20for%20our%20e-commerce%20platform.%20Our%20team%20of%2012%20currently%20uses%20a%20monolith.%20Present%20this%20to%20the%20review%20board.">🚀 Run in Copilot</a>
+<a href="vscode-insiders://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2F05-dialog-simulator.flow.yaml%0A%0AWe're%20considering%20adopting%20micro-frontends%20for%20our%20e-commerce%20platform.%20Our%20team%20of%2012%20currently%20uses%20a%20monolith.%20Present%20this%20to%20the%20review%20board.">🚀 Run in Insiders</a>
+
+<small>Or copy: `@flow #file:.github/flows/05-dialog-simulator.flow.yaml`</small>
+
+<a href="../../assets/screenshots/dialog-simulator.png" target="_blank" title="Click to enlarge"><img src="../../assets/screenshots/dialog-simulator.png" alt="Multi-persona dialog with Architect, Dev Lead, and Project Manager" /></a>
+
+The simulation:
+
+1. **Architect** presents the case — benefits, costs, risks, recommended first step
+2. **Dev Lead** pushes back — team impact, timeline realism, migration order
+3. **Project Manager** evaluates — business case, competing priorities, go/no-go
+
+Each role sees the full conversation and responds naturally — just like a real meeting.
+
+## Step 3: Customize for Your Own Topic
+
+To simulate a different discussion, edit the **Architect's prompt** to describe your proposal:
+
+```yaml
+- name: "Architect (Presenter)"
+  prompt: |
+    You are presenting a proposal to adopt event-driven architecture
+    for our order processing pipeline.
+    Current stack: REST APIs, PostgreSQL, 5 services.
+```
+
+You can also add more personas — a **Security Officer**, **UX Designer**, or **CFO** — just add them as roles.
+
+## What You Got
+
+- A realistic multi-role discussion with distinct, natural voices
+- Objections and questions you might not have thought of
+- A pattern you can reuse for any multi-stakeholder decision
+
+## Next Steps
+
+Learn [tool control](/tutorials/tool-control/) — choose the right tools to keep flows efficient.
+
+---
+# tutorials › efficiency-patterns
+
+## The Efficiency Triad
+
+A well-designed flow isn't just correct — it's efficient. Three levers control efficiency:
+
+```
+┌─────────────────────────────────────────────────────┐
+│                                                     │
+│   Tool Strategy     Context Budget    Skills         │
+│   ─────────────     ──────────────    ──────         │
+│   "Which tools      "How much         "What domain   │
+│    per role?"        context?"         knowledge?"   │
+│                                                     │
+│   Fewer tools =     Less context =    Skills inject  │
+│   smaller prompts   faster runs       knowledge      │
+│                                       without bloat  │
+└─────────────────────────────────────────────────────┘
+```
+
+## Lever 1: Tool Strategy
+
+Every tool reference consumes context window. A role with 10 tools has a much larger system prompt than a role with 2 — even if it never uses 8 of them.
+
+**The spectrum:**
+
+| Approach | Tools per role | Context cost | Best for |
+|----------|---------------|-------------|----------|
+| Minimal | 1-2 | Very low | Focused tasks (code review, analysis) |
+| Moderate | 3-4 | Medium | Implementation tasks (read + write + search) |
+| Full | 5-7 | High | Complex automation (SDD full cycle, incident response) |
+
+**Real examples:**
+
+```yaml
+# code-review.flow.yaml — minimal (2 tools)
+tools:
+  - copilot_readFile
+  - copilot_findTextInFiles
+
+# backlog-ranking.flow.yaml — minimal (2 tools)
+tools:
+  - copilot_readFile
+  - copilot_findTextInFiles
+
+# sdd-openspec-full-cycle.flow.yaml — full (7 tools, justified)
+tools:
+  - vscode_askQuestions
+  - copilot_readFile
+  - copilot_findTextInFiles
+  - copilot_listDirectory
+  - copilot_createFile
+  - copilot_replaceString
+  - run_in_terminal
+  - get_terminal_output
+```
+
+**Design principle:** Start minimal. Add tools only when a role demonstrably needs them. The code-review flow works with 2 tools — don't give it 7 "just in case."
+
+## Lever 2: Context Budget
+
+Context flows into a role from multiple sources. When the token budget is tight, lower-priority elements drop first:
+
+| Priority | Source | Management Strategy |
+|----------|--------|-------------------|
+| 1000 | Role prompt | Keep concise. Use `agent:` for reusable prompts. |
+| 950 | User query | Outside your control. |
+| 900 | Editor context | Outside your control. |
+| 700 | History | Previous role outputs — unavoidable in pipeline. |
+| 600 | Context files | **Your biggest lever.** Be selective. |
+
+**Strategies:**
+
+1. **Use `agent:` for long system prompts.** If a role's prompt is 50+ lines, move it to a `.agent.md` file referenced by `agent:`. The content is the same, but you can version it separately.
+
+2. **Be selective with `contexts:`.** Don't reference every doc. Reference the ones roles actually use:
+   ```yaml
+   # Good — targeted
+   contexts:
+     - docs/api-contracts.md
+     - docs/security-guidelines.md
+
+   # Bad — kitchen sink
+   contexts:
+     - docs/**/*
+   ```
+
+3. **Use `sharedContext` for short, stable guidance.** If it's under half a page, put it in `sharedContext` rather than a separate file (one less file I/O, simpler mental model).
+
+## Lever 3: Skills Integration
+
+Skills are reusable prompt fragments that inject domain knowledge without bloating individual role prompts.
+
+```yaml
+skills:
+  - sdd-terminology          # All roles know SDD concepts
+
+roles:
+  - name: "Requirements Analyst"
+    prompt: |
+      Produce a Requirements Specification...
+    # Can reference SDD terminology without it being in the prompt
+```
+
+**Real example:** `sdd-openspec-full-cycle.flow.yaml` uses 4 skills:
+```yaml
+skills:
+  - sdd-terminology
+  - openspec-propose
+  - openspec-apply-change
+  - openspec-archive-change
+```
+
+Without skills, these roles would need to explain SDD concepts and OpenSpec workflows in every prompt — massive duplication and context bloat.
+
+**When to use skills:**
+- Domain terminology used across multiple roles
+- Workflow patterns that multiple roles follow
+- Reusable instructions (coding standards, output formats)
+
+**When NOT to use skills:**
+- Role-specific instructions (put those in the prompt)
+- One-off context (use `contexts:`)
+- Short prompts where skills would add indirection without saving tokens
+
+## Efficiency Checklist
+
+Before finalizing a flow, ask:
+
+- [ ] **Tools:** Does every role have ONLY the tools it needs?
+- [ ] **Prompts:** Could long prompts be moved to `agent:` files?
+- [ ] **Contexts:** Are context files limited to what roles actually reference?
+- [ ] **Skills:** Is shared domain knowledge injected via skills, not copied into prompts?
+- [ ] **Structure:** Would fork-join be faster than pipeline? Would pipeline be simpler than staged?
+
+## What You Learned
+
+- Tool count is a deliberate design choice — start minimal, add as needed
+- Context budget has a priority ladder — context files drop first
+- Skills inject domain knowledge without per-role prompt bloat
+- Efficiency isn't premature optimization — it's good flow design
+
+## Next Steps
+
+Learn [autonomous design](/tutorials/autonomous-design/) — when to delegate flows to background execution.
+
+---
+# tutorials › fork-join
+
+## What You'll Build
+
+A fork-join flow: **Technical** and **Business** analysts evaluate independently and simultaneously, then a **Synthesiser** combines both into one recommendation.
+
+```
+[Technical Analyst] ──┐
+                      ├──→ [Synthesiser]
+[Business Analyst] ───┘
+```
+
+## Step 1: Install and Open
+
+```
+@flow /install 03-fork-join-perspectives
+```
+
+Open `.github/flows/03-fork-join-perspectives.flow.yaml`. Notice the different structure:
+
+<a href="vscode://feima.copilot-ai-flow/open?flow=03-fork-join-perspectives">🔧 Open in Editor</a>
+<a href="vscode-insiders://feima.copilot-ai-flow/open?flow=03-fork-join-perspectives">🔧 Open in Insiders</a>
+
+```yaml
+groups:
+  - name: "Technical Perspective"
+    roles:
+      - name: "Technical Analyst"
+  - name: "Business Perspective"
+    roles:
+      - name: "Business Analyst"
+join:
+  name: "Synthesiser"
+```
+
+- **`groups:`** — two or more groups that run in **parallel**
+- **`join:`** — a single role that reads ALL group outputs and synthesises them
+- Each group can have multiple roles in a pipeline
+
+## When Fork-Join Shines
+
+Fork-join is ideal when perspectives are **truly independent**:
+
+| Use Case | Groups |
+|----------|--------|
+| Technology decision | Technical eval + Business case + Security review |
+| Incident response | App layer + Infrastructure + Data layer investigation |
+| Design review | UX + Architecture + Accessibility |
+| Bake-off | Approach A implementation + Approach B implementation → Compare |
+
+**Don't use fork-join when** groups share dependencies. If Group B needs Group A's output to start, that's a pipeline.
+
+## Step 2: Run in Parallel
+
+```
+@flow #file:.github/flows/03-fork-join-perspectives.flow.yaml
+
+Should we rewrite our billing service in Go?
+Current stack: Python/Django, 50k invoices/month, 3-person team
+```
+
+<a href="vscode://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2F03-fork-join-perspectives.flow.yaml%0A%0AShould%20we%20rewrite%20our%20billing%20service%20in%20Go%3F%0ACurrent%20stack%3A%20Python%2FDjango%2C%2050k%20invoices%2Fmonth%2C%203-person%20team">🚀 Run in Copilot</a>
+<a href="vscode-insiders://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2F03-fork-join-perspectives.flow.yaml%0A%0AShould%20we%20rewrite%20our%20billing%20service%20in%20Go%3F%0ACurrent%20stack%3A%20Python%2FDjango%2C%2050k%20invoices%2Fmonth%2C%203-person%20team">🚀 Run in Insiders</a>
+
+<small>Or copy: `@flow #file:.github/flows/03-fork-join-perspectives.flow.yaml`</small>
+
+<a href="../../assets/screenshots/fork-join.png" target="_blank" title="Click to enlarge"><img src="../../assets/screenshots/fork-join.png" alt="Fork-join execution with parallel groups and Synthesiser join" /></a>
+
+Watch what happens:
+
+1. **Technical Analyst** and **Business Analyst** run **simultaneously** — neither waits for the other
+2. Both produce structured assessments with ratings and recommendations
+3. **Synthesiser** reads both outputs, identifies agreements and conflicts, produces a unified go/no-go recommendation
+
+## Decision Tree
+
+```
+Can roles start without each other's output?
+  ├── Yes → Fork-Join (groups: + join:)
+  └── No → Pipeline (roles:)
+```
+
+## What You Got
+
+- Two independent analyses running in parallel
+- A unified recommendation that reconciles conflicting perspectives
+- Understanding of when fork-join is faster than pipeline
+
+## Next Steps
+
+Learn [context files](/tutorials/context-files/) — inject project documentation into your flows.
+
+---
+# tutorials › hello-world
+
+## What You'll Build
+
+Your first flow. Two roles — a **Planner** who thinks through the approach and an **Editor** who executes it. In under 2 minutes, you'll understand the core idea: roles execute in sequence, each seeing the previous role's output.
+
+## What Is a Flow?
+
+A flow is a `.flow.yaml` file that defines a team of AI roles. Each role has a specific job, and they pass work between them automatically. You don't copy/paste — the output flows.
+
+```
+[Planner] → [Editor]
+   plans      writes
+```
+
+That's it. Two roles. One file. No configuration needed.
+
+## Step 1: Install the Example Flow
+
+Open the flow gallery (`AI Flow: Open Flow Gallery` from the command palette), find **Hello, Flow**, and click **Install**. This copies `hello-world.flow.yaml` to `.github/flows/`.
+
+Or run this in Copilot Chat:
+
+```
+@flow /install hello-world
+```
+
+## Step 2: Open the Flow File
+
+Open `.github/flows/hello-world.flow.yaml`. Look at the structure:
+
+<a href="vscode://feima.copilot-ai-flow/open?flow=hello-world">🔧 Open in Editor</a>
+<a href="vscode-insiders://feima.copilot-ai-flow/open?flow=hello-world">🔧 Open in Insiders</a>
+
+```yaml
+roles:
+  - name: "Planner"
+    prompt: |
+      You are a planning assistant...
+  - name: "Editor"
+    prompt: |
+      You are an editor who turns plans into polished output...
+```
+
+Every flow has:
+- **`name:`** — identifies the flow
+- **`roles:`** — the team of AI roles, each with a `name` and `prompt`
+- **`sharedContext:`** — documentation that helps users AND provides persistent context
+
+The `prompt:` is the system instruction for that role — it defines what the role does and how it formats output.
+
+## Step 3: Run It
+
+```
+@flow #file:.github/flows/hello-world.flow.yaml
+
+Write a README for a TypeScript library that validates email addresses
+```
+
+<a href="vscode://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fhello-world.flow.yaml%0A%0AWrite%20a%20README%20for%20a%20TypeScript%20library%20that%20validates%20email%20addresses">🚀 Run in Copilot</a>
+<a href="vscode-insiders://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fhello-world.flow.yaml%0A%0AWrite%20a%20README%20for%20a%20TypeScript%20library%20that%20validates%20email%20addresses">🚀 Run in Insiders</a>
+
+<small>Or copy: `@flow #file:.github/flows/hello-world.flow.yaml`</small>
+
+<a href="../../assets/screenshots/hello-world.png" target="_blank" title="Click to enlarge"><img src="../../assets/screenshots/hello-world.png" alt="Hello, Flow output showing Planner plan and Editor final result" /></a>
+
+Watch what happens:
+
+1. **Planner** reads your query and produces a structured plan with numbered steps, dependencies, and pitfalls
+2. **Editor** reads the plan and produces the final README
+
+Each role sees the previous role's output automatically. No copy/paste needed.
+
+## What You Got
+
+- A structured plan (numbered steps, dependencies, watch-outs)
+- A polished final output based on that plan
+- Understanding of the core flow concept: `roles:` execute in sequence
+
+## Next Steps
+
+Now that you understand what a flow is, [learn the pipeline pattern](/tutorials/pipeline-basics/) with three specialized roles.
+
+---
+# tutorials › human-gate
+
+## What You'll Build
+
+A flow that **pauses** to ask you structured questions before executing. A **Commander** gathers your answers, then an **Executor** acts within the constraints you set.
+
+```
+[Commander (🔴 pauses)] → [Executor]
+   asks questions             acts on answers
+```
+
+## The Key Tool: `vscode_askQuestions`
+
+`vscode_askQuestions` is the tool that makes human gates possible. When a role calls it:
+
+1. Execution **pauses**
+2. The user sees structured questions in the chat UI — each with clickable option labels
+3. The user selects options (or types custom answers)
+4. Execution **resumes** with the answers available to the role
+
+This is the only tool that requires human interaction during execution.
+
+## Step 1: Install and Open
+
+```
+@flow /install 06-human-gate
+```
+
+Open `.github/flows/06-human-gate.flow.yaml`. Notice:
+
+<a href="vscode://feima.copilot-ai-flow/open?flow=06-human-gate">🔧 Open in Editor</a>
+<a href="vscode-insiders://feima.copilot-ai-flow/open?flow=06-human-gate">🔧 Open in Insiders</a>
+
+```yaml
+tools:
+  - vscode_askQuestions       # required for the gate
+
+roles:
+  - name: "Commander (Gate)"
+    prompt: |
+      Call `vscode_askQuestions` ONCE with all questions in a single invocation...
+  - name: "Executor"
+    tools:
+      - copilot_readFile      # Executor gets its own tools
+      - copilot_findTextInFiles
+```
+
+The Commander has `vscode_askQuestions`. The Executor has code tools. They get different tool sets because they do different things.
+
+## Step 2: The Single-Invocation Rule
+
+**Always call `vscode_askQuestions` ONCE with ALL questions.** Never call it multiple times sequentially.
+
+```yaml
+# ✅ Correct — one call, all questions
+Call `vscode_askQuestions` ONCE with:
+- Question 1: "What is the scope?" [options]
+- Question 2: "What are the constraints?" [options]
+- Question 3: "What is the priority?" [options]
+
+# ❌ Wrong — sequential calls
+Call `vscode_askQuestions` with question 1...
+Wait for answer...
+Call `vscode_askQuestions` with question 2...
+```
+
+Each invocation pauses execution. Two pauses = bad user experience.
+
+## Step 3: Crafting Good Questions
+
+For each question, provide 3-5 concrete option labels. The first option should be the sensible default.
+
+```yaml
+Call `vscode_askQuestions` ONCE with all questions in a single invocation.
+
+Questions to ask:
+- "What is the scope size?"
+  Options: [Small (1 file), Medium (2-5 files), Large (5+ files), Cross-cutting, Unknown]
+
+- "Are there any constraints?"
+  Options: [Must not change API, Must preserve backward compatibility, Must follow existing patterns, No constraints, Other]
+```
+
+The option labels carry the nuance — keep questions to one sentence each.
+
+## Step 4: Run with a Gate
+
+```
+@flow #file:.github/flows/06-human-gate.flow.yaml
+
+I need to add error handling to our API endpoints
+```
+
+<a href="vscode://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2F06-human-gate.flow.yaml%0A%0AI%20need%20to%20add%20error%20handling%20to%20our%20API%20endpoints">🚀 Run in Copilot</a>
+<a href="vscode-insiders://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2F06-human-gate.flow.yaml%0A%0AI%20need%20to%20add%20error%20handling%20to%20our%20API%20endpoints">🚀 Run in Insiders</a>
+
+<small>Or copy: `@flow #file:.github/flows/06-human-gate.flow.yaml`</small>
+
+<a href="../../assets/screenshots/human-gate.png" target="_blank" title="Click to enlarge"><img src="../../assets/screenshots/human-gate.png" alt="Human gate with vscode_askQuestions dialog and downstream execution" /></a>
+
+The flow:
+
+1. **Commander** asks you structured questions about scope, constraints, priority
+2. You click options for each question
+3. **Commander** produces a Directive — a clear brief with your answers as constraints
+4. **Executor** reads the Directive and executes within those boundaries
+
+## Human Gates and Delegation Don't Mix
+
+`vscode_askQuestions` requires human interaction. `delegate: true` sends execution to the background (no UI). They're incompatible:
+
+```yaml
+# ❌ Doesn't work — delegated roles can't ask questions
+- name: "Commander"
+  delegate: true           # background execution
+  prompt: |
+    Call vscode_askQuestions...  # no one will answer!
+
+# ✅ Works — gate is interactive, executor is delegated
+- name: "Commander"
+  # no delegate — user answers questions
+- name: "Executor"
+  delegate: true           # runs in background after gate
+```
+
+## What You Got
+
+- A human-in-the-loop flow that gathers structured input before executing
+- Understanding of the `vscode_askQuestions` tool and single-invocation pattern
+- Knowing how to construct effective questions with option labels
+
+## Where to Go From Here
+
+You've completed all the basic tutorials. Move to [In Practice](/tutorials/your-first-flow/) to apply these concepts in a real workflow, or dive into [Advanced](/tutorials/quality-gates/) to learn flow author design patterns.
+
+---
+# tutorials › iteration-convergence
+
+## What You'll Build
+
+A staged flow where **Writer** and **Critic** loop until the output meets quality criteria. If the draft is good on the first try, the loop exits immediately — no wasted work.
+
+```
+[Writer] → [Critic] → (passes?) → done
+                ↓ (fails)
+          [Writer revises] → [Critic] → ...
+```
+
+## Step 1: Install and Open
+
+```
+@flow /install 02-iterative-refine
+```
+
+Open `.github/flows/02-iterative-refine.flow.yaml`. Notice the different structure:
+
+<a href="vscode://feima.copilot-ai-flow/open?flow=02-iterative-refine">🔧 Open in Editor</a>
+<a href="vscode-insiders://feima.copilot-ai-flow/open?flow=02-iterative-refine">🔧 Open in Insiders</a>
+
+```yaml
+stages:
+  - name: "Refinement Loop"
+    iterations: 3       # max 3 loops
+    roles:
+      - name: "Writer"
+      - name: "Critic"
+```
+
+Instead of `roles:` at the top level, we have `stages:` — each stage contains roles that loop.
+
+## Step 2: Understand Convergence
+
+The **Critic** has this instruction:
+
+```
+If the draft meets ALL criteria, output ONLY:
+<!-- flow:done -->
+```
+
+The `<!-- flow:done -->` sentinel is the convergence signal. When ANY role in a stage outputs this exact text (on its own line), the stage exits early — no need to run all `iterations:`.
+
+This means:
+- **Good output** → 1 pass, exits early
+- **Needs work** → up to 3 passes
+- **Never good enough** → stops at 3 regardless (the cap prevents infinite loops)
+
+## Step 3: Run with Iteration
+
+```
+@flow #file:.github/flows/02-iterative-refine.flow.yaml
+
+Write a one-page proposal for migrating our monolith to microservices
+```
+
+<a href="vscode://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2F02-iterative-refine.flow.yaml%0A%0AWrite%20a%20one-page%20proposal%20for%20migrating%20our%20monolith%20to%20microservices">🚀 Run in Copilot</a>
+<a href="vscode-insiders://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2F02-iterative-refine.flow.yaml%0A%0AWrite%20a%20one-page%20proposal%20for%20migrating%20our%20monolith%20to%20microservices">🚀 Run in Insiders</a>
+
+<small>Or copy: `@flow #file:.github/flows/02-iterative-refine.flow.yaml`</small>
+
+<a href="../../assets/screenshots/iteration-convergence.png" target="_blank" title="Click to enlarge"><img src="../../assets/screenshots/iteration-convergence.png" alt="Staged iteration with Writer/Critic loop and flow:done convergence" /></a>
+
+Watch what happens:
+
+1. **Writer** produces a draft
+2. **Critic** evaluates against 4 criteria (clear, accurate, complete, concise)
+3. If the draft passes all 4 → `<!-- flow:done -->` appears and the stage ends
+4. If not → Critic gives specific feedback, Writer revises, loop continues
+
+## When to Use Iteration vs. Pipeline
+
+| Scenario | Pipeline | Staged |
+|----------|----------|--------|
+| Well-defined task, predictable output | ✓ Faster | Overkill |
+| Quality matters, output varies by attempt | May miss issues | ✓ Loops to quality |
+| Single pass is usually enough | ✓ Simpler | Adds latency |
+| Need built-in quality gate | Manual review needed | ✓ Automatic |
+
+**Rule of thumb**: Start with pipeline. Add iteration when you find yourself re-running flows because the first output wasn't good enough.
+
+## What You Got
+
+- A staged flow that loops until quality criteria are met
+- Understanding of the `<!-- flow:done -->` convergence sentinel
+- Knowing when to choose iteration over simple pipeline
+
+## Next Steps
+
+Learn [fork-join](/tutorials/fork-join/) — run roles in parallel and synthesise the results.
+
+---
+# tutorials › jira-integration
+
+## What You'll Build
+
+Extend the story estimation flow to automatically create estimated stories in your Jira backlog with confidence levels and risk factors.
+
+## Prerequisites
+
+- A Jira MCP server configured (if using MCP tools)
+- The `story-estimation.flow.yaml` installed in `.github/flows/`
+
+## Step 1: Enhance the Flow
+
+```
+@flow /enhance story-estimation.flow.yaml --add-jira-integration
+```
+
+The AI reads the existing flow, understands the Estimator + Splitter role's output format, and adds:
+
+- Jira tool access (`jira_create_issue` or equivalent)
+- A new "Jira Publisher" role that creates tickets from estimation output
+- Updated tool lists to include Jira tools
+
+## Step 2: Review the Enhanced Flow
+
+Open `.github/flows/story-estimation.flow.yaml` and verify:
+
+1. The Estimator + Splitter role's output format includes Jira-compatible fields (summary, description, story points, labels)
+2. The new Jira Publisher role maps estimation output to Jira ticket structure
+3. Tool configuration includes Jira-related tools
+
+## Step 3: Run the Enhanced Flow
+
+```
+@flow #file:.github/flows/story-estimation.flow.yaml
+
+Story: Add user authentication with JWT tokens
+- Login endpoint with email/password
+- Token validation middleware
+- Refresh token rotation
+- Logout functionality
+```
+
+The virtual scrum team estimates the story, then the Jira Publisher creates a ticket with the estimate, confidence level, and risk factors.
+
+<a href="vscode://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fstory-estimation.flow.yaml%0A%0AStory%3A%20Add%20user%20authentication%20with%20JWT">🚀 Run in Copilot</a>
+<a href="vscode-insiders://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fstory-estimation.flow.yaml%0A%0AStory%3A%20Add%20user%20authentication%20with%20JWT">🚀 Run in Insiders</a>
+
+## What You Got
+
+- Multi-role estimation (Product Owner, Dev Lead, QA Lead, Senior Dev, Senior QA, Dev, QA)
+- Jira ticket auto-creation with estimates, confidence levels, and risk factors
+- Zero manual data entry between estimation and ticket creation
+
+## Customize Further
+
+- **Slack notification**: Add a `send_to_terminal` or webhook role that posts a summary to Slack
+- **GitHub Issues**: Replace Jira tools with GitHub Issues API (same pattern, different tool)
+- **Estimation history**: Add a context file that tracks past estimates for velocity calibration
+
+## Next Steps
+
+Add [staged iteration](/tutorials/staged-iteration/) so the team can loop until consensus on tricky stories.
+
+---
+# tutorials › pipeline-basics
+
+## What You'll Build
+
+A three-role pipeline: **Analyst** investigates, **Reviewer** evaluates, **Summariser** reports. Each role builds on the previous output — the fundamental flow pattern.
+
+```
+[Analyst] → [Reviewer] → [Summariser]
+```
+
+## Step 1: Install and Open
+
+Install the example flow:
+
+```
+@flow /install 01-pipeline-review
+```
+
+Open `.github/flows/01-pipeline-review.flow.yaml`. Notice the three roles each have a distinct perspective:
+
+<a href="vscode://feima.copilot-ai-flow/open?flow=01-pipeline-review">🔧 Open in Editor</a>
+<a href="vscode-insiders://feima.copilot-ai-flow/open?flow=01-pipeline-review">🔧 Open in Insiders</a>
+
+| Role | Perspective | Output |
+|------|-------------|--------|
+| Analyst | Fact-finding | Patterns, facts, areas of interest |
+| Reviewer | Evaluation | Validated findings, gaps, priorities |
+| Summariser | Synthesis | Bottom line, key findings, actions |
+
+## Step 2: Run the Pipeline
+
+```
+@flow #file:.github/flows/01-pipeline-review.flow.yaml
+
+Review the architecture of our payment processing service.
+It handles 10k transactions/hour through a single queue.
+```
+
+<a href="vscode://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2F01-pipeline-review.flow.yaml%0A%0AReview%20the%20architecture%20of%20our%20payment%20processing%20service.%20It%20handles%2010k%20transactions%2Fhour%20through%20a%20single%20queue.">🚀 Run in Copilot</a>
+<a href="vscode-insiders://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2F01-pipeline-review.flow.yaml%0A%0AReview%20the%20architecture%20of%20our%20payment%20processing%20service.%20It%20handles%2010k%20transactions%2Fhour%20through%20a%20single%20queue.">🚀 Run in Insiders</a>
+
+<small>Or copy: `@flow #file:.github/flows/01-pipeline-review.flow.yaml`</small>
+
+<a href="../../assets/screenshots/pipeline-basics.png" target="_blank" title="Click to enlarge"><img src="../../assets/screenshots/pipeline-basics.png" alt="Pipeline execution with three sequential roles" /></a>
+
+Watch the handoffs:
+
+1. **Analyst** gathers facts — identifies the single queue as the bottleneck, notes volume patterns
+2. **Reviewer** reads the analysis — validates findings, flags missing pieces, prioritises concerns
+3. **Summariser** reads both — distills into a one-page executive summary with actions
+
+## Why Pipeline?
+
+The pipeline pattern works when **each role depends on the previous role's output**. The Analyst's findings are the Reviewer's input. The Reviewer's evaluation is the Summariser's input.
+
+If roles don't depend on each other, [fork-join](/tutorials/fork-join/) is faster — roles run in parallel.
+
+## Practice: Add Tools
+
+The example has no tools. Let's add them.
+
+Open `.github/flows/01-pipeline-review.flow.yaml` and add a `tools:` section before `roles:`:
+
+```yaml
+tools:
+  - copilot_readFile
+  - copilot_findTextInFiles
+
+roles:
+  ...
+```
+
+Now the Analyst can read files and search code — the pipeline becomes more powerful.
+
+Run it again with a real codebase reference:
+
+```
+@flow #file:.github/flows/01-pipeline-review.flow.yaml
+
+Review the error handling in src/api/handlers.ts
+```
+
+<a href="vscode://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2F01-pipeline-review.flow.yaml%0A%0AReview%20the%20error%20handling%20in%20src%2Fapi%2Fhandlers.ts">🚀 Run in Copilot</a>
+<a href="vscode-insiders://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2F01-pipeline-review.flow.yaml%0A%0AReview%20the%20error%20handling%20in%20src%2Fapi%2Fhandlers.ts">🚀 Run in Insiders</a>
+
+The Analyst reads the actual file, finds specific patterns, and the pipeline produces a grounded review.
+
+## What You Got
+
+- A three-role pipeline with distinct, complementary perspectives
+- Understanding of sequential handoff — output flows role to role
+- Practice adding tools to make roles more capable
+
+## Next Steps
+
+Learn [iteration and convergence](/tutorials/iteration-convergence/) — make roles loop until the output is good enough.
+
+---
+# tutorials › quality-gates
+
+## Beyond the Basics
+
+You know how to write a pipeline. But pipelines produce output — they don't guarantee quality. This tutorial teaches three patterns that build quality checks INTO the flow, so bad output is caught before it reaches you.
+
+## Pattern 1: Human Gate
+
+**Problem:** The user's query is vague. Downstream roles make assumptions. Output is wrong because the wrong question was answered.
+
+**Solution:** Insert a Commander role that calls `vscode_askQuestions` before any execution.
+
+```
+Naive:  [Analyst] → [Writer] → done
+                      ↑ makes assumptions, gets it wrong
+
+Fixed:  [Commander 🔴] → [Analyst] → [Writer] → done
+         asksQuestions    works with real answers
+```
+
+**Real example:** `war-room-triage.flow.yaml` — the Incident Commander asks structured questions about severity, impact, timeline, and symptoms before the investigation team starts. Without this gate, investigators would guess at critical details.
+
+**When to gate:**
+- The task is ambiguous (scope, priority, constraints unclear)
+- Wrong assumptions would cause significant rework
+- You want to constrain downstream roles to specific boundaries
+
+**When NOT to gate:**
+- The query is already specific and complete
+- The flow is a quick check (gating adds latency)
+- The flow runs autonomously (`delegate: true` — gates don't work in background)
+
+## Pattern 2: Critic Loop
+
+**Problem:** The first pass is often good but not great. You re-run the flow manually. Repetitive and unpredictable.
+
+**Solution:** Add a Critic role in a staged loop. The Critic evaluates output against clear criteria. If it passes, the loop exits. If not, the Writer gets specific feedback and revises.
+
+```
+Naive:  [Writer] → done
+         70% quality
+
+Fixed:  [Writer] → [Critic] → (passes?) → done
+                       ↓ (fails)
+                 [Writer revises] → [Critic] → ...
+                                       90%+ quality
+```
+
+**Real example:** `sdd-openspec-full-cycle.flow.yaml` — the Requirements stage has a Requirements Critic that validates completeness, checks for missing non-functional requirements, and verifies priority/size annotations. The loop exits when the spec meets all criteria.
+
+**When to loop:**
+- Output quality varies significantly between runs
+- There are objective quality criteria (completeness, format, accuracy)
+- The cost of bad output is high (specifications, production code)
+
+**When NOT to loop:**
+- Quality is consistently good on first pass
+- The criteria are subjective (critic gives vague feedback)
+- The task benefits from human review more than AI review
+
+## Pattern 3: Adversarial Role
+
+**Problem:** A reviewer who shares the writer's perspective misses blind spots. Reviews are polite, not thorough.
+
+**Solution:** Add a role whose explicit purpose is to BREAK the output. An Edge Case Hunter, a Security Penetration Tester, a Devil's Advocate.
+
+```
+Naive:  [Designer] → [Writer] → done
+                         ↑ no one tries to break it
+
+Fixed:  [Designer] → [Writer] → [Edge Case Hunter 🦊] → done
+                                   actively tries to break it
+```
+
+**Real example:** `test-writing.flow.yaml` — the Edge Case Hunter role challenges test coverage, finds missing edge cases, proposes adversarial inputs, and identifies untested error paths. Its job is to find what the Test Writer missed.
+
+**When to use adversarial roles:**
+- Security-critical code (penetration testing mindset)
+- Testing (coverage gaps are hard to see from the writer's perspective)
+- Design reviews (someone needs to play devil's advocate)
+
+**When NOT to use:**
+- Simple, well-understood tasks
+- When the adversarial role becomes a bottleneck (unnecessary scrutiny)
+
+## Composing the Patterns
+
+These patterns compose. The most powerful flows use all three:
+
+```
+[Commander 🔴] → [Analyst] → [Critic] → [Writer] → [Hunter 🦊] → done
+    gate          staged loop               adversarial
+```
+
+**Real example:** `sdd-openspec-full-cycle.flow.yaml` uses all three:
+1. **Human Gate** — Requirements Clarifier asks questions before anything else
+2. **Critic Loop** — Requirements Critic validates the spec in a staged loop
+3. **Adversarial** — Later stages challenge the architecture and implementation
+
+## What You Learned
+
+- Human gates prevent downstream execution on bad assumptions
+- Critic loops improve output through structured iteration
+- Adversarial roles find gaps that sympathetic reviewers miss
+- These patterns compose — use them together for mission-critical flows
+
+## Next Steps
+
+Learn [efficiency patterns](/tutorials/efficiency-patterns/) — keep flows fast and cost-effective with tool strategy, context budgeting, and skills.
+
+---
+# tutorials › staged-iteration
+
+## What You'll Build
+
+Wrap your estimation roles in a `stages:` block so the team iterates until consensus, using a convergence sentinel to exit early.
+
+## Why Iteration
+
+Pipeline flows execute once. For estimation, the first pass may not reach consensus — the Estimator's synthesis might flag contradictory inputs from different roles. Iteration lets roles refine their assessments based on each other's feedback.
+
+## Step 1: Enhance with Staged Iteration
+
+```
+@flow /enhance story-estimation.flow.yaml --add-iterative-stage
+```
+
+The AI wraps the existing roles in a `stages:` block:
+
+```yaml
+stages:
+  - name: "Team Estimation"
+    iterations: 3
+    roles:
+      - name: "Product Owner"
+        prompt: |
+          ...
+          If the team has reached consensus (all estimates within 2 points),
+          output ONLY: <!-- flow:done -->
+      - name: "Dev Lead"
+        ...
+```
+
+## Step 2: Understand Convergence
+
+The `<!-- flow:done -->` sentinel is critical. When any role in a stage outputs this exact string (on its own line), the stage exits early — no need to run all `iterations`.
+
+**Where to place it:**
+- In the Estimator + Splitter role: emit `<!-- flow:done -->` when all perspectives converge within acceptable range
+- In a new Consensus Checker role: emit `<!-- flow:done -->` after verifying agreement
+
+## Step 3: Run with Iteration
+
+```
+@flow #file:.github/flows/story-estimation.flow.yaml
+
+Story: Refactor the payment processing pipeline
+- The current pipeline has 15 steps and is hard to debug
+- We need it broken into composable stages with clear error boundaries
+```
+
+Watch the team iterate. On ambiguous stories, they may run 2-3 rounds. On clear stories, the convergence sentinel triggers after 1 round.
+
+<a href="vscode://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fstory-estimation.flow.yaml%0A%0AStory%3A%20Refactor%20the%20payment%20processing%20pipeline">🚀 Run in Copilot</a>
+<a href="vscode-insiders://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fstory-estimation.flow.yaml%0A%0AStory%3A%20Refactor%20the%20payment%20processing%20pipeline">🚀 Run in Insiders</a>
+
+## What You Got
+
+- Roles that iterate until consensus, not just one pass
+- Early exit via `<!-- flow:done -->` when the team agrees
+- Configurable `iterations` cap to prevent infinite loops
+
+## When Iteration Helps
+
+| Scenario | Pipeline | Staged |
+|----------|----------|--------|
+| Well-understood story | Fine | Slightly slower |
+| Ambiguous story with tradeoffs | May miss nuance | Iterates to resolution |
+| Large story where perspectives diverge | Produces conflicting output | Refines until convergence |
+
+## Next Steps
+
+For truly long-running estimation sessions, [delegate to CLI execution](/tutorials/cli-delegation/) and check results later.
+
+---
+# tutorials › tool-control
+
+## What You'll Learn
+
+Every tool a role has access to consumes context window space. By default, roles may get more tools than they need. Explicit `tools:` lists give you control — and keep flows fast and cheap.
+
+## The Problem
+
+Without `tools:`, roles may receive a large default tool set. If a role only needs to read files, giving it file creation, terminal access, and search tools wastes context window that could go to your actual content.
+
+```
+Default tools (maybe 10+)           Explicit tools (just 2)
+─────────────────────────           ─────────────────────
+copilot_readFile                    copilot_readFile
+copilot_findTextInFiles             copilot_findTextInFiles
+copilot_createFile    ← unused
+copilot_replaceString ← unused
+run_in_terminal       ← unused
+vscode_askQuestions   ← unused
+...                                  ↑ focused, efficient
+```
+
+## The Solution: Explicit `tools:`
+
+List only the tools each role actually needs:
+
+```yaml
+# Flow-level — inherited by all roles
+tools:
+  - copilot_readFile
+
+roles:
+  - name: "Analyst"
+    prompt: |
+      Analyse the codebase...
+    # Inherits flow-level tools: copilot_readFile
+
+  - name: "Writer"
+    prompt: |
+      Write the implementation...
+    tools:                          # role-level — extends flow-level
+      - copilot_createFile
+      - copilot_replaceString
+```
+
+- **Flow-level `tools:`** — inherited by all roles (unless a role has its own list)
+- **Role-level `tools:`** — extends flow-level tools for that specific role
+
+## Which Tools to Choose
+
+| Task | Minimal Tools |
+|------|--------------|
+| Code review | `copilot_readFile`, `copilot_findTextInFiles` |
+| Write code | `copilot_readFile`, `copilot_createFile`, `copilot_replaceString` |
+| Investigation / search | `copilot_readFile`, `copilot_findTextInFiles` |
+| File operations | `copilot_readFile`, `copilot_createFile`, `copilot_replaceString` |
+| Terminal / build | `run_in_terminal`, `get_terminal_output` |
+| Human gate | `vscode_askQuestions` |
+
+## Practice: Add Tools to Your Flows
+
+<a href="../../assets/screenshots/tool-control-add-tools.png" target="_blank" title="Click to enlarge"><img src="../../assets/screenshots/tool-control-add-tools.png" alt="Adding explicit tools: list to a flow YAML and running it" /></a>
+
+Open `.github/flows/hello-world.flow.yaml` from the first tutorial. It has no `tools:`. Add this before `roles:`:
+
+<a href="vscode://feima.copilot-ai-flow/open?flow=hello-world">🔧 Open in Editor</a>
+<a href="vscode-insiders://feima.copilot-ai-flow/open?flow=hello-world">🔧 Open in Insiders</a>
+
+```yaml
+tools:
+  - copilot_readFile
+
+roles:
+  ...
+```
+
+Now the Planner and Editor can read files. Run it again — the output may reference actual project files.
+
+For the pipeline flow, open `.github/flows/01-pipeline-review.flow.yaml` and add:
+
+```yaml
+tools:
+  - copilot_readFile
+  - copilot_findTextInFiles
+```
+
+Now the Analyst can search your codebase, making the review grounded in actual code.
+
+## Tool Count Is a Design Decision
+
+| Flow | Tools | Context cost | Best for |
+|------|-------|-------------|----------|
+| `code-review` | 2 | Low | Quick reviews |
+| `backlog-ranking` | 2 | Low | Sprint planning |
+| `test-writing` | 4 | Medium | Comprehensive testing |
+| `war-room-triage` | 5 | High | Incident response (worth it) |
+| `sdd-openspec-full-cycle` | 7 | High | Full-cycle (needs all of them) |
+
+Start small. Add tools when you need them — not before.
+
+## What You Got
+
+- Understanding that tool count impacts context window
+- Ability to choose minimal tool sets per role
+- Practice adding tools to existing flows
+
+## Next Steps
+
+Learn the [human gate](/tutorials/human-gate/) pattern — collect structured user input before execution.
+
+---
+# tutorials › your-first-flow
+
+## What You'll Build
+
+A multi-role code review flow that analyzes code from correctness and security perspectives — all from a single natural language description.
+
+## Step 1: Create the Flow
+
+In the Copilot Chat panel:
+
+```
+@flow /create a code review with separate security and style lenses
+```
+
+The AI generates a complete `.flow.yaml` file with:
+
+- **Two specialized reviewers**: Logic & Correctness, plus Style & Security
+- **A Verdict synthesizer**: Combines findings into prioritized recommendations
+- **Structured output formats**: Each role produces tables with severity, findings, and recommendations
+- **Self-documentation**: The `sharedContext` section explains what, when, how, and how to customize
+
+## Step 2: Run the Flow
+
+```
+@flow #file:.github/flows/code-review.flow.yaml
+
+Review the changes in src/auth/login.ts
+```
+
+Watch as each role executes in sequence:
+
+1. **Logic & Correctness Reviewer** analyzes algorithm correctness, edge cases, logical errors
+2. **Style & Security Reviewer** checks vulnerabilities, style, and maintainability — building on the first reviewer's output
+3. **Verdict** synthesizes everything into critical, high, and medium priority issues
+
+<a href="vscode://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fcode-review.flow.yaml%0A%0AReview%20the%20changes%20in%20">🚀 Run in Copilot</a>
+<a href="vscode-insiders://github.copilot-chat/chat?prompt=%40flow%20%23file%3A.github%2Fflows%2Fcode-review.flow.yaml%0A%0AReview%20the%20changes%20in%20">🚀 Run in Insiders</a>
+
+<small>Or copy: `@flow #file:.github/flows/code-review.flow.yaml`</small>
+
+## What You Got
+
+A prioritized review with:
+
+| Priority | Description |
+|----------|-------------|
+| Critical | Must fix before merge |
+| High | Should fix soon |
+| Medium | Consider fixing |
+
+Each finding includes severity, location, and specific recommendations.
+
+## Next Steps
+
+The generated flow is a starting point. In the next tutorial, you'll [customize it for your team](/tutorials/customize-flow/).
+
+---
+# guides › execution-patterns
+
+## The Three Patterns
+
+Copilot AI Flow supports three structural patterns. The pattern is inferred from which YAML key you use.
+
+### Pipeline (`roles:`)
+
+Roles execute sequentially — each sees the previous role's output.
+
+```
+[Role A] → [Role B] → [Role C]
+```
+
+**Best for:**
+- Code review (correctness → security → verdict)
+- PR descriptions (historian → assessor → writer)
+- Document generation (research → draft → review)
+
+**When not to use:** When roles don't depend on each other's output. Parallel patterns are faster.
+
+### Iterative (`stages:`)
+
+Roles loop up to N iterations. Exits early when any role outputs `<!-- flow:done -->`.
+
+```
+[Stage: Team Discussion (iterations: 3)]
+  [Role A] → [Role B] → [Role C]  →  (converges? exit : loop)
+```
+
+**Best for:**
+- Estimation where perspectives may conflict
+- Design reviews that need consensus
+- Any workflow where "discuss until agreement"
+
+**When not to use:** Simple pipelines where one pass is sufficient. Don't add iteration for its own sake.
+
+### Fork-Join (`groups:` + `join:`)
+
+Roles in different groups run in parallel. A join role synthesizes all outputs.
+
+```
+[Group A: Security] ────┐
+[Group B: Performance] ─┤──→ [Join: Synthesis]
+[Group C: Data Layer]  ──┘
+```
+
+**Best for:**
+- Incident triage (parallel investigation across layers)
+- Multi-perspective analysis (security, performance, cost — all at once)
+- Bake-off comparisons (two approaches, one reviewer)
+
+**When not to use:** When groups share dependencies. Fork-join requires truly independent analysis.
+
+## Decision Tree
+
+```
+Is there one clear sequence of steps?
+  ├── Yes → Pipeline (roles:)
+  └── No → Do roles need to iterate until agreement?
+            ├── Yes → Staged (stages:)
+            └── No → Can roles run independently in parallel?
+                      ├── Yes → Fork-Join (groups: + join:)
+                      └── No → Pipeline (roles:)
+```
+
+## The Two Role Axes
+
+Every role has two independent axes:
+
+| Axis | Controls | Options |
+|------|----------|---------|
+| **Content source** | Where the system prompt comes from | `prompt:` (inline) or `agent:` (file reference) |
+| **Execution path** | Which runtime handles the call | Default (VS Code LM API) or `delegate: true` (Copilot SDK) |
+
+These are orthogonal — you can combine them:
+
+```yaml
+roles:
+  - name: Architect
+    agent: alex              # content from .github/agents/alex.agent.md
+    delegate: true           # execution via Copilot SDK
+```
+
+## Context Inheritance
+
+Skills, contexts, and tools declared at the flow level are inherited by all roles:
+
+```yaml
+contexts:
+  - docs/architecture.md    # available to every role
+skills:
+  - sdd-terminology         # available to every role
+tools:
+  - copilot_readFile        # available to every role
+roles:
+  - name: Reviewer
+    contexts:
+      - docs/review-checklist.md  # additional, role-specific context
+```
+
+---
+# guides › flow-authoring
+
+## The Core Idea
+
+A flow is a **delegation of thinking**. Instead of one generalist prompt that does everything, you decompose a task into roles — each with a focused perspective, specific tools, and narrow responsibilities.
+
+## Role Decomposition
+
+### The "Distinct Perspective" Rule
+
+Every role should have a perspective that the others don't. If two roles would produce similar output, merge them.
+
+**Too vague:**
+```yaml
+roles:
+  - name: Reviewer 1
+    prompt: Review the code
+  - name: Reviewer 2
+    prompt: Also review the code
+```
+
+**Distinct perspectives:**
+```yaml
+roles:
+  - name: Logic & Correctness Reviewer
+    prompt: Focus on algorithm correctness, edge cases, logical errors
+  - name: Style & Security Reviewer
+    prompt: Focus on vulnerabilities, naming conventions, maintainability
+  - name: Verdict
+    prompt: Synthesize findings into prioritized recommendations
+```
+
+### Role Count Guidelines
+
+| Task Complexity | Recommended Roles |
+|-----------------|-------------------|
+| Simple (one concern) | 2-3 |
+| Moderate (multiple concerns) | 3-5 |
+| Complex (cross-cutting, team-scale) | 5-8 |
+
+More than 8 roles rarely helps — token budget and latency become issues.
+
+## Writing Effective Role Prompts
+
+Each role prompt should follow this structure:
+
+```yaml
+- name: "Role Name"
+  prompt: |
+    You are a [role identity with specific expertise].
+
+    Your responsibilities:
+    - [Specific responsibility 1]
+    - [Specific responsibility 2]
+
+    Process:
+    1. [First step — what to do first]
+    2. [Second step]
+    3. [Third step — produce output]
+
+    Output format:
+    ## [Section Name]
+
+    | Column | Column | Column |
+    |--------|--------|--------|
+    [Structured table format]
+```
+
+### Prompt Writing Tips
+
+- **Be specific about the output format.** Tables with columns force structured thinking.
+- **Number the process steps.** This creates a clear execution order.
+- **Use "You are" not "Act as".** It produces more consistent role behavior.
+- **Include edge case handling in responsibilities.** "Identify edge cases and boundary conditions" in every reviewer.
+
+## sharedContext Best Practices
+
+Every flow should include `sharedContext` — it's self-documentation that helps users AND provides the model with persistent context:
+
+```yaml
+sharedContext: |
+  # [Flow Name]
+
+  ## What This Does
+  [One paragraph]
+
+  ## When to Use
+  - [Scenario 1]
+  - [Scenario 2]
+
+  ## How It Works
+  [Role sequence]
+
+  ## Example
+  ```
+  @flow #file:[filename].flow.yaml
+  [sample input]
+  ```
+
+  ## What You'll Get
+  [Expected output]
+
+  ## Customize It
+  - [Hint 1]
+  - [Hint 2]
+```
+
+## Pattern Selection
+
+See [Choosing Execution Patterns](/guides/execution-patterns/) for the decision tree. Quick reference:
+
+| Pattern | When | Avoid When |
+|---------|------|------------|
+| Pipeline | Clear sequential steps | Roles are independent |
+| Staged | Need iteration/consensus | One pass is enough |
+| Fork-Join | Parallel independent analysis | Groups share dependencies |
+
+---
+# guides › referencing-files
+
+## Three Reference Methods
+
+### 1. Inline Prompt
+
+The simplest approach — write the prompt directly in the YAML:
+
+```yaml
+roles:
+  - name: Reviewer
+    prompt: |
+      You are a code reviewer. Analyze for correctness, security, and style.
+      Output findings with severity and recommendations.
+```
+
+### 2. URI Reference
+
+Reference an absolute or relative file path:
+
+```yaml
+roles:
+  - name: Architect
+    prompt: file:///home/user/agents/architect.prompt.md
+
+  - name: Security
+    prompt: ../agents/security-reviewer.prompt.md
+```
+
+URI references resolve relative to the flow file's location.
+
+### 3. Filename Reference
+
+Use just the filename — the system searches in order:
+
+```yaml
+roles:
+  - name: Architect
+    agent: architect    # searches: .github/agents/architect.agent.md
+```
+
+**Search order for filename references:**
+1. `.github/prompts/` or `.github/agents/`
+2. `.vscode/prompts/` or `.vscode/agents/`
+3. `~/.copilot/prompts/` or `~/.copilot/agents/`
+
+## Combining prompt and agent
+
+You can use both — the agent file provides the system prompt base, and `prompt:` can add role-specific instructions:
+
+```yaml
+roles:
+  - name: Architect
+    agent: architect              # base personality from agent file
+    prompt: |
+      Focus specifically on database schema design.
+      Flag any N+1 query patterns.
+```
+
+## Context Files
+
+Context files are injected at lower priority so they don't consume the token budget for role instructions:
+
+```yaml
+contexts:
+  - docs/architecture.md          # inline path
+  - path: docs/coding-standards.md  # explicit object form
+  - docs/adr/                     # directory — all .md files included
+```
+
+Context files declared at the flow level are available to all roles. You can also declare them at the role or stage level for scoped context.
+
+## YAML Frontmatter in Prompt Files
+
+Prompt files (`.prompt.md`) can include YAML frontmatter:
+
+```markdown
+---
+name: Architect Review
+version: "1.0"
+---
+
+You are a software architect reviewing for...
+```
+
+The frontmatter is stripped before the prompt is sent to the model.
+
+---
+# guides › tool-integration
+
+## Tool Configuration
+
+Tools are declared at the flow level (available to all roles) or per-role:
+
+```yaml
+# Flow-level — every role can use these
+tools:
+  - copilot_readFile
+  - copilot_findTextInFiles
+
+roles:
+  - name: Code Writer
+    tools:
+      - copilot_createFile     # only this role can create files
+      - copilot_replaceString  # only this role can edit files
+```
+
+Use `"*"` to grant all available VS Code tools.
+
+## Common Integration Patterns
+
+### Jira / Issue Tracker
+
+```yaml
+tools:
+  - copilot_readFile
+  - jira_get_issue
+  - jira_create_issue
+  - jira_search_issues
+
+roles:
+  - name: Estimator
+    prompt: |
+      After synthesizing estimates, format the output for Jira ticket creation.
+      Include: summary, description, story points, labels, confidence level.
+  - name: Jira Publisher
+    prompt: |
+      Create Jira tickets from the estimation output.
+      For each story, create a ticket with the estimate and rationale.
+```
+
+### GitHub / GitLab
+
+```yaml
+tools:
+  - copilot_readFile
+  - gh_pr_create
+  - gh_pr_comment
+
+roles:
+  - name: PR Writer
+    prompt: |
+      After composing the PR description, create the PR with:
+      - Title from the description
+      - Body from the full markdown
+      - Labels based on change type (bug, feature, refactor)
+```
+
+### Slack / Notifications
+
+Use `run_in_terminal` or a webhook tool to post summaries:
+
+```yaml
+tools:
+  - run_in_terminal
+
+roles:
+  - name: Notifier
+    prompt: |
+      After the review completes, post a summary to Slack:
+      
+      curl -X POST https://hooks.slack.com/services/... \
+        -H 'Content-Type: application/json' \
+        -d '{"text": "Code review complete: 3 critical, 5 high, 2 medium issues found"}'
+```
+
+## Tool Inheritance
+
+Tools declared at the flow level are inherited by all roles. Role-level tools are additive:
+
+```yaml
+tools:
+  - copilot_readFile          # all roles can read files
+
+roles:
+  - name: Analyst
+    # inherits copilot_readFile only
+
+  - name: Implementer
+    tools:
+      - copilot_createFile    # inherits copilot_readFile + gets createFile
+```
+
+## MCP Servers
+
+Configure MCP servers in VS Code settings, then reference their tools in flows:
+
+```json
+// .vscode/settings.json
+{
+  "mcp.servers": {
+    "jira": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/jira-mcp-server"]
+    }
+  }
+}
+```
+
+Tools from configured MCP servers become available in the flow's tool list.
+
+---
+# getting-started › installation
+
+## Install the Extension
+
+1. Open VS Code
+2. Go to the Extensions view (`Ctrl+Shift+X`)
+3. Search for **Copilot AI Flow**
+4. Click **Install**
+
+Or install from the command line:
+
+```bash
+code --install-extension feima.copilot-ai-flow
+```
+
+## Requirements
+
+- VS Code 1.90+
+- GitHub Copilot Chat extension installed and authenticated
+
+## Verify Installation
+
+Open the Copilot Chat panel (`Ctrl+Shift+I` on Windows/Linux, `Cmd+Shift+I` on Mac) and type:
+
+```
+@flow /list
+```
+
+You should see the built-in flow library. If not, reload VS Code (`Ctrl+Shift+P` → "Developer: Reload Window").
+
+## Next Steps
+
+Head to the [Quick Start](/getting-started/quickstart/) to run your first flow in 60 seconds.
+
+---
+# getting-started › quickstart
+
+## Your First Flow
+
+Open the Copilot Chat panel and type:
+
+```
+@flow /create a code review with separate security and style lenses
+```
+
+This generates a valid `.flow.yaml` file in `.github/flows/`. Now run it:
+
+```
+@flow #file:.github/flows/code-review.flow.yaml
+
+Review the changes in src/auth/login.ts
+```
+
+That's it. The flow runs three specialized reviewers — Logic & Correctness, Style & Security, and a Verdict synthesizer — each building on the previous output.
+
+## What Just Happened
+
+1. `@flow /create` used AI to generate a complete flow from your description
+2. The flow was saved to `.github/flows/` — you own it, you can edit it
+3. `@flow #file:` ran the flow, executing each role in sequence
+4. Each role saw the previous role's output and built on it
+
+## Try Another Flow
+
+The built-in library has production-ready flows you can install:
+
+```
+@flow /install story-estimation
+@flow #file:.github/flows/story-estimation.flow.yaml
+
+Story: Add user authentication with JWT tokens
+- Login endpoint with email/password
+- Token validation middleware
+- Refresh token rotation
+```
+
+## What's Next
+
+- [Make It Yours](/tutorials/customize-flow/) — customize a flow's roles and prompts
+- [Connect to Jira](/tutorials/jira-integration/) — integrate with your tools
+- [Browse the Gallery](#) — open `AI Flow: Open Flow Gallery` from the command palette
+
+
+---
+## Install AI Flow
+
+Download from the VS Code Marketplace:
+https://marketplace.visualstudio.com/items?itemName=feima.copilot-ai-flow
+
+Requirements: VS Code 1.85+, GitHub Copilot Chat
+License: MIT

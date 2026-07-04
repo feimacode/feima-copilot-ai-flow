@@ -117,3 +117,9 @@ See [Choosing Execution Patterns](/guides/execution-patterns/) for the decision 
 | Pipeline | Clear sequential steps | Roles are independent |
 | Staged | Need iteration/consensus | One pass is enough |
 | Fork-Join | Parallel independent analysis | Groups share dependencies |
+
+
+---
+
+<a href="https://marketplace.visualstudio.com/items?itemName=feima.copilot-ai-flow" style="display: inline-block; background: #0078d4; color: #fff; padding: 10px 24px; border-radius: 6px; font-weight: 600; text-decoration: none;">⬇ Install AI Flow from the VS Code Marketplace</a>
+

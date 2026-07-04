@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { ILogger } from '../platform/log/common/logService';
+import { refToUri } from '../util/refToUri';
 
 /**
  * Service for discovering flow files from various sources:
@@ -24,31 +25,17 @@ export class FlowDiscoveryService {
 	}
 
 	/**
-	 * Extract a URI from a ChatPromptReference using duck-typing
+	 * Extract a URI from a ChatPromptReference using duck-typing.
+	 * Delegates to shared util to avoid instanceof across the API proxy.
 	 */
-	private refToUri(ref: vscode.ChatPromptReference): vscode.Uri | undefined {
-		const v = ref.value;
-		if (v && typeof v === 'object') {
-			if ('scheme' in v && 'path' in v) {
-				try { return vscode.Uri.from(v as vscode.Uri); } catch { /* ignore */ }
-			}
-			if ('uri' in v && 'range' in v) {
-				const loc = v as { uri: unknown };
-				if (loc.uri && typeof loc.uri === 'object' && 'scheme' in loc.uri && 'path' in loc.uri) {
-					try { return vscode.Uri.from(loc.uri as vscode.Uri); } catch { /* ignore */ }
-				}
-			}
-		}
-		if (typeof ref.id === 'string' && ref.id.startsWith('file:')) {
-			try { return vscode.Uri.parse(ref.id, /*strict*/ true); } catch { /* ignore */ }
-		}
-		return undefined;
+	public resolveRefUri(ref: vscode.ChatPromptReference): vscode.Uri | undefined {
+		return refToUri(ref);
 	}
 
 	/** Scan a list of references and return the best flow-file URI. */
 	private scanRefs(refs: readonly vscode.ChatPromptReference[]): vscode.Uri | undefined {
 		for (const ref of refs) {
-			const uri = this.refToUri(ref);
+			const uri = refToUri(ref);
 			if (!uri) { continue; }
 			const lp = uri.path.toLowerCase();
 			if (lp.endsWith('.flow.yaml') || lp.endsWith('.flow.yml')) { return uri; }

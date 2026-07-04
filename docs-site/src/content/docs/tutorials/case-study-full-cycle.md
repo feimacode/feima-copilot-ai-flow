@@ -140,3 +140,9 @@ The flow uses 7 tools — but not all roles get all tools:
 - When to choose each primitive based on the problem, not the feature list
 
 You've completed the advanced tutorials. You now understand flows from "hello world" through full-cycle autonomous design.
+
+
+---
+
+<a href="https://marketplace.visualstudio.com/items?itemName=feima.copilot-ai-flow" style="display: inline-block; background: #0078d4; color: #fff; padding: 10px 24px; border-radius: 6px; font-weight: 600; text-decoration: none;">⬇ Install AI Flow from the VS Code Marketplace</a>
+

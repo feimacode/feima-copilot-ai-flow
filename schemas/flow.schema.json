@@ -59,8 +59,13 @@
     },
     "model": {
       "type": "string",
-      "description": "Panel-level model override. Individual roles can override with their own `model` field.",
-      "examples": ["claude-sonnet-4.5", "claude-haiku-4.5", "claude-opus-4.5", "gpt-5", "gpt-5.1"]
+      "description": "Panel-level model override. Supports exact id, vendor.model, or glob patterns (`*`). Individual roles can override with their own `model` field.",
+      "examples": [
+        "claude-sonnet-4.5",
+        "copilot.gpt-5",
+        "copilot.*",
+        "gpt-*"
+      ]
     },
     "tools": {
       "type": "array",
@@ -234,8 +239,13 @@
         },
         "model": {
           "type": "string",
-          "description": "Model override for this specific role. Takes precedence over the panel-level `model`.",
-          "examples": ["claude-sonnet-4.5", "claude-haiku-4.5", "gpt-5"]
+          "description": "Model override for this specific role. Supports exact id, vendor.model, or glob patterns (`*`). Takes precedence over the panel-level `model`.",
+          "examples": [
+            "claude-sonnet-4.5",
+            "copilot.gpt-5",
+            "copilot.*",
+            "gpt-*"
+          ]
         },
         "skills": {
           "type": "array",
@@ -275,8 +285,13 @@
         },
         "model": {
           "type": "string",
-          "description": "Model override for all roles in this group. Role-level `model` takes precedence.",
-          "examples": ["claude-sonnet-4.5", "claude-haiku-4.5", "gpt-5"]
+          "description": "Model override for all roles in this group. Supports exact id, vendor.model, or glob patterns (`*`). Role-level `model` takes precedence.",
+          "examples": [
+            "claude-sonnet-4.5",
+            "copilot.gpt-5",
+            "copilot.*",
+            "gpt-*"
+          ]
         },
         "skills": {
           "type": "array",

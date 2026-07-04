@@ -54,14 +54,6 @@ export class FlowPromptRenderer {
 		
 		this.log.debug(`renderRolePrompt called for ${roleName} (toolRounds=${toolCallRounds.length})`);
 
-		// Get a language model for tokenization
-		const models = await vscode.lm.selectChatModels({ vendor: 'copilot' });
-		const model = models.length > 0 ? models[0] : undefined;
-		
-		if (!model) {
-			throw new Error('No language model available for prompt rendering');
-		}
-		
 		this.log.debug('Calling renderPrompt...');
 
 		let result;

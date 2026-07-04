@@ -1,0 +1,35 @@
+# AI Flow — Multi-Agent Orchestration for VS Code
+
+> Multi-agent AI orchestration inside VS Code. Define workflows as version-controlled YAML files, run autonomous tool-using agents, get consistent repeatable results.
+>
+> Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=feima.copilot-ai-flow)
+>
+> Source: [GitHub](https://github.com/feimacode/feima-copilot-ai-flow)
+
+## Docs
+
+- [Getting Started](https://flow-docs.feimacode.com/getting-started/installation/): Installation and first-run guide
+- [Quick Start](https://flow-docs.feimacode.com/getting-started/quickstart/): Run your first flow in 60 seconds
+- [Hello, Flow](https://flow-docs.feimacode.com/tutorials/hello-world/): Core concepts in 2 minutes
+- [Pipeline Basics](https://flow-docs.feimacode.com/tutorials/pipeline-basics/): Sequential multi-role orchestration
+- [Fork-Join](https://flow-docs.feimacode.com/tutorials/fork-join/): Parallel investigation patterns
+- [Iteration & Convergence](https://flow-docs.feimacode.com/tutorials/iteration-convergence/): Refinement loops
+- [Tool Control](https://flow-docs.feimacode.com/tutorials/tool-control/): Autonomous tool-use configuration
+- [Context Files](https://flow-docs.feimacode.com/tutorials/context-files/): Smart token-budget-aware context injection
+- [Human Gate](https://flow-docs.feimacode.com/tutorials/human-gate/): Human-in-the-loop approval steps
+- [Dialog Simulator](https://flow-docs.feimacode.com/tutorials/dialog-simulator/): Multi-turn conversation simulation
+- [Quality Gates](https://flow-docs.feimacode.com/tutorials/quality-gates/): Building quality into flows
+- [Efficiency Patterns](https://flow-docs.feimacode.com/tutorials/efficiency-patterns/): Keeping flows fast and lean
+- [Autonomous Design](https://flow-docs.feimacode.com/tutorials/autonomous-design/): Designing for unattended execution
+- [Choosing Execution Patterns](https://flow-docs.feimacode.com/guides/execution-patterns/): Pipeline vs Iterative vs Fork-Join
+- [Flow Authoring](https://flow-docs.feimacode.com/guides/flow-authoring/): Concepts and best practices
+- [Tool Integration](https://flow-docs.feimacode.com/guides/tool-integration/): Connecting external tools
+- [Referencing Files](https://flow-docs.feimacode.com/guides/referencing-files/): File patterns in flows
+
+## Install
+
+[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=feima.copilot-ai-flow)
+
+## Source
+
+[GitHub](https://github.com/feimacode/feima-copilot-ai-flow)

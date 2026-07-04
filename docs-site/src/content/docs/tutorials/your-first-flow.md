@@ -56,3 +56,9 @@ Each finding includes severity, location, and specific recommendations.
 ## Next Steps
 
 The generated flow is a starting point. In the next tutorial, you'll [customize it for your team](/tutorials/customize-flow/).
+
+
+---
+
+<a href="https://marketplace.visualstudio.com/items?itemName=feima.copilot-ai-flow" style="display: inline-block; background: #0078d4; color: #fff; padding: 10px 24px; border-radius: 6px; font-weight: 600; text-decoration: none;">⬇ Install AI Flow from the VS Code Marketplace</a>
+

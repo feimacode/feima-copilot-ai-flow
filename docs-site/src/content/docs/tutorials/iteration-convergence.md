@@ -93,3 +93,9 @@ Watch what happens:
 ## Next Steps
 
 Learn [fork-join](/tutorials/fork-join/) — run roles in parallel and synthesise the results.
+
+
+---
+
+<a href="https://marketplace.visualstudio.com/items?itemName=feima.copilot-ai-flow" style="display: inline-block; background: #0078d4; color: #fff; padding: 10px 24px; border-radius: 6px; font-weight: 600; text-decoration: none;">⬇ Install AI Flow from the VS Code Marketplace</a>
+

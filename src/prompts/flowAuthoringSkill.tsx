@@ -16,6 +16,10 @@ import {
 export interface FlowAuthoringSkillProps extends BasePromptElementProps {
 	/** The user's natural language description of the desired flow. */
 	readonly description: string;
+  /** The JSON schema content for flow validation (as string). */
+  readonly schema?: string;
+  /** An example .flow.yaml file content (as string). */
+  readonly example?: string;
 }
 
 /**
@@ -38,6 +42,20 @@ export class FlowAuthoringSkill extends PromptElement<FlowAuthoringSkillProps> {
 ## What to Output
 
 Output a complete .flow.yaml file. Use ONLY the YAML format shown below. Do NOT add explanatory text before or after the YAML — the output will be saved directly as a .flow.yaml file.
+
+## Schema Reference
+
+The generated YAML must conform to this JSON Schema:
+\`\`\`json
+${this.props.schema ?? ''}
+\`\`\`
+
+## Example Flow
+
+Here is a working example of a .flow.yaml file:
+\`\`\`yaml
+${this.props.example ?? ''}
+\`\`\`
 
 ## YAML Structure
 

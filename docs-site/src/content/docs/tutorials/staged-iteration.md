@@ -73,3 +73,9 @@ Watch the team iterate. On ambiguous stories, they may run 2-3 rounds. On clear 
 ## Next Steps
 
 For truly long-running estimation sessions, [delegate to CLI execution](/tutorials/cli-delegation/) and check results later.
+
+
+---
+
+<a href="https://marketplace.visualstudio.com/items?itemName=feima.copilot-ai-flow" style="display: inline-block; background: #0078d4; color: #fff; padding: 10px 24px; border-radius: 6px; font-weight: 600; text-decoration: none;">⬇ Install AI Flow from the VS Code Marketplace</a>
+

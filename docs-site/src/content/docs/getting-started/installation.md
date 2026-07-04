@@ -34,3 +34,9 @@ You should see the built-in flow library. If not, reload VS Code (`Ctrl+Shift+P`
 ## Next Steps
 
 Head to the [Quick Start](/getting-started/quickstart/) to run your first flow in 60 seconds.
+
+
+---
+
+<a href="https://marketplace.visualstudio.com/items?itemName=feima.copilot-ai-flow" style="display: inline-block; background: #0078d4; color: #fff; padding: 10px 24px; border-radius: 6px; font-weight: 600; text-decoration: none;">⬇ Install AI Flow from the VS Code Marketplace</a>
+

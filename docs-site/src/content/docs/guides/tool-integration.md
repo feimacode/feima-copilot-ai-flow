@@ -113,3 +113,9 @@ Configure MCP servers in VS Code settings, then reference their tools in flows:
 ```
 
 Tools from configured MCP servers become available in the flow's tool list.
+
+
+---
+
+<a href="https://marketplace.visualstudio.com/items?itemName=feima.copilot-ai-flow" style="display: inline-block; background: #0078d4; color: #fff; padding: 10px 24px; border-radius: 6px; font-weight: 600; text-decoration: none;">⬇ Install AI Flow from the VS Code Marketplace</a>
+

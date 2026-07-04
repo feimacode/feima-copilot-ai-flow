@@ -110,3 +110,9 @@ These patterns compose. The most powerful flows use all three:
 ## Next Steps
 
 Learn [efficiency patterns](/tutorials/efficiency-patterns/) — keep flows fast and cost-effective with tool strategy, context budgeting, and skills.
+
+
+---
+
+<a href="https://marketplace.visualstudio.com/items?itemName=feima.copilot-ai-flow" style="display: inline-block; background: #0078d4; color: #fff; padding: 10px 24px; border-radius: 6px; font-weight: 600; text-decoration: none;">⬇ Install AI Flow from the VS Code Marketplace</a>
+

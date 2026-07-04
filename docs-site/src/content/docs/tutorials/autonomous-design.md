@@ -123,3 +123,9 @@ A flow designed for autonomy needs:
 ## Next Steps
 
 Final tutorial: [Case Study](/tutorials/case-study-full-cycle/) — walk through designing a complete flow, seeing every pattern composed.
+
+
+---
+
+<a href="https://marketplace.visualstudio.com/items?itemName=feima.copilot-ai-flow" style="display: inline-block; background: #0078d4; color: #fff; padding: 10px 24px; border-radius: 6px; font-weight: 600; text-decoration: none;">⬇ Install AI Flow from the VS Code Marketplace</a>
+

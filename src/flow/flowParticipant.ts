@@ -12,6 +12,8 @@ import { CatalogClient } from './catalogClient';
 import { ILogger } from '../platform/log/common/logService';
 import { renderPrompt } from '@vscode/prompt-tsx';
 import { FlowAuthoringSkill } from '../prompts/flowAuthoringSkill';
+import { selectModel } from '../util/selectModel';
+import { refToUri } from '../util/refToUri';
 
 /**
  * Chat participant that orchestrates flow discussions.
@@ -21,6 +23,7 @@ export class FlowParticipant {
 	private readonly engine: FlowEngine;
 	private readonly library: FlowLibrary;
 	private readonly discoveryService: FlowDiscoveryService;
+	private readonly log: ILogger;
 
 	/** Ordered tutorial pages — markdown files inside docs-site/src/content/docs/tutorials/. */
 	private static readonly _tutorialPages = [
@@ -46,10 +49,12 @@ export class FlowParticipant {
 	constructor(private readonly context: vscode.ExtensionContext, log: ILogger) {
 		const engineLog = log.createSubLogger('FlowEngine');
 		const discoveryLog = log.createSubLogger('Discovery');
+		const participantLog = log.createSubLogger('Participant');
 		const catalogClient = new CatalogClient(context, log);
 		this.engine = new FlowEngine(engineLog);
 		this.library = new FlowLibrary(context, catalogClient);
 		this.discoveryService = new FlowDiscoveryService(discoveryLog);
+		this.log = participantLog;
 	}
 	
 	/**
@@ -82,9 +87,13 @@ export class FlowParticipant {
 	): Promise<vscode.ChatResult> {
 		
 		try {
+			// Debug: log what we're receiving
+			this.log.info(`Request received — command: ${request.command}, prompt: ${request.prompt}, references: ${request.references?.length}`);
+
 			// Dispatch slash commands (/search, /list, /browse, /install) before any
 			// flow-execution logic. These commands query/install the built-in library.
 			if (request.command) {
+				this.log.info(`Routing to handleLibraryCommand: ${request.command}`);
 				return this.handleLibraryCommand(request, stream, token);
 			}
 
@@ -130,9 +139,9 @@ export class FlowParticipant {
 			case 'install':
 				return this.handleInstall(request.prompt, stream, token);
 			case 'create':
-				return this.handleCreate(request.prompt, stream, token);
+				return this.handleCreate(request, stream, token);
 			case 'enhance':
-				return this.handleEnhance(request.prompt, stream, token);
+				return this.handleEnhance(request, stream, token);
 			case 'refresh':
 				return this.handleRefresh(stream, token);
 			case 'status':
@@ -560,12 +569,15 @@ export class FlowParticipant {
 
 	/** `/create <description>` — generate a new .flow.yaml from natural language. */
 	private async handleCreate(
-		prompt: string,
+		request: vscode.ChatRequest,
 		stream: vscode.ChatResponseStream,
 		token: vscode.CancellationToken
 	): Promise<vscode.ChatResult> {
-		const description = prompt.trim();
+		const description = request.prompt.trim();
+		this.log.info(`handleCreate: description="${description.substring(0, 80)}" model=${request.model?.name}(${request.model?.id}) vendor=${request.model?.vendor}`);
+
 		if (!description) {
+			this.log.info('handleCreate: empty description, returning usage');
 			stream.markdown('**Usage**: `@flow /create <description>`\n\nDescribe the flow you want in natural language.\n\n**Example**: `@flow /create a code review with separate security and style lenses`');
 			return {};
 		}
@@ -573,21 +585,34 @@ export class FlowParticipant {
 		stream.progress('Generating flow...');
 
 		try {
-			const yamlContent = await this._generateFlowYaml(description, token);
+			this.log.trace('handleCreate: calling _generateFlowYaml');
+			const result = await this._generateFlowYaml(description, request.model, token);
 
-			if (!yamlContent) {
-				stream.markdown('❌ Failed to generate a valid flow. Try a more specific description.');
+			if (!result) {
+				this.log.error('_generateFlowYaml returned undefined — no language models available');
+				stream.markdown('❌ No language model available. Please check your model configuration.');
 				return {};
 			}
 
-			const fileName = await this._writeFlowToWorkspace(yamlContent, stream);
+			if (!result.valid) {
+				stream.markdown('⚠️ **Warning**: The generated flow could not be fully validated, but the raw output has been saved. You may need to manually fix YAML issues.\n\n');
+			}
+
+			this.log.trace(`handleCreate: YAML generated, length=${result.content.length}`);
+			const fileName = await this._writeFlowToWorkspace(result.content, stream);
 			if (fileName) {
-				stream.markdown(`✅ Flow created: \`${fileName}\`\n\n`);
+				const statusIcon = result.valid ? '✅' : '⚠️';
+				this.log.info(`handleCreate: flow written to ${fileName} (valid=${result.valid})`);
+				stream.markdown(`${statusIcon} Flow ${result.valid ? 'created' : 'saved'}: \`${fileName}\`\n\n`);
 				stream.markdown(`Run it with: \`@flow #file:${fileName}\`\n\n`);
+				if (!result.valid) {
+					stream.markdown('> 💡 The generated YAML may have syntax issues. Open the file and fix any errors, or use `@flow /enhance` to refine it.\n\n');
+				}
 				stream.markdown('💡 **Next steps**:\n- Run the flow to see it in action\n- Edit the YAML to customize roles and prompts\n- Use `@flow /enhance` to add tools, stages, or integrations');
 			}
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
+			this.log.error(err instanceof Error ? err : msg, 'handleCreate failed');
 			stream.markdown(`❌ **Error**: ${msg}`);
 		}
 
@@ -596,12 +621,15 @@ export class FlowParticipant {
 
 	/** `/enhance <instruction>` — enhance an existing flow from a natural language instruction. */
 	private async handleEnhance(
-		input: string,
+		request: vscode.ChatRequest,
 		stream: vscode.ChatResponseStream,
 		token: vscode.CancellationToken
 	): Promise<vscode.ChatResult> {
-		const trimmed = input.trim();
+		const trimmed = request.prompt.trim();
+		this.log.info(`handleEnhance: instruction="${trimmed.substring(0, 80)}" model=${request.model?.name}(${request.model?.id}) vendor=${request.model?.vendor}, refs=${request.references.length}`);
+
 		if (!trimmed) {
+			this.log.info('handleEnhance: empty instruction, returning usage');
 			stream.markdown('**Usage**: `@flow /enhance <instruction>`\n\nAdd features to the active flow.\n\n**Example**: `@flow /enhance --add-jira-integration`');
 			return {};
 		}
@@ -611,169 +639,433 @@ export class FlowParticipant {
 		try {
 			const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 			if (!workspaceFolder) {
+				this.log.error('handleEnhance: no workspace folder open');
 				stream.markdown('❌ No workspace folder is open.');
 				return {};
 			}
 
-			const flowsDir = vscode.Uri.joinPath(workspaceFolder.uri, '.github', 'flows');
-			let flowFiles: [string, vscode.Uri][] = [];
-			try {
-				const entries = await vscode.workspace.fs.readDirectory(flowsDir);
-				flowFiles = entries
-					.filter(([name]) => name.endsWith('.flow.yaml'))
-					.map(([name]) => [name, vscode.Uri.joinPath(flowsDir, name)] as [string, vscode.Uri]);
-			} catch {
-				stream.markdown('❌ No flows found in `.github/flows/`. Use `@flow /install` or `@flow /create` first.');
+			// Resolve attached references: flow file target + context files
+			const { targetUri, targetName, contextFiles } = await this._resolveEnhanceReferences(request, workspaceFolder.uri);
+
+			if (!targetUri) {
+				this.log.error('handleEnhance: could not determine target flow file');
 				return {};
 			}
 
-			// If no explicit file specified, use the first .flow.yaml found
-			let targetUri: vscode.Uri;
-			let targetName: string;
-			const words = trimmed.split(/\s+/);
-			const firstWord = words[0];
-
-			if (firstWord.endsWith('.flow.yaml') || firstWord.endsWith('.flow.yml')) {
-				targetName = firstWord;
-				const match = flowFiles.find(([name]) => name === firstWord);
-				if (match) {
-					targetUri = match[1];
-				} else {
-					targetUri = vscode.Uri.joinPath(flowsDir, firstWord);
-				}
-			} else if (flowFiles.length === 1) {
-				targetName = flowFiles[0][0];
-				targetUri = flowFiles[0][1];
-			} else {
-				stream.markdown(`❌ Multiple flows found. Specify which flow to enhance:\n\n`);
-				for (const [name] of flowFiles) {
-					stream.markdown(`- \`@flow /enhance ${name} ${trimmed}\`\n`);
-				}
-				return {};
-			}
+			this.log.trace(`handleEnhance: target=${targetName}, contextFiles=${contextFiles.length}`);
 
 			// Read existing flow
 			let existingContent: string;
 			try {
 				const bytes = await vscode.workspace.fs.readFile(targetUri);
 				existingContent = Buffer.from(bytes).toString('utf8');
+				this.log.trace(`handleEnhance: read existing flow, length=${existingContent.length}`);
 			} catch {
+				this.log.error(`handleEnhance: failed to read ${targetName}`);
 				stream.markdown(`❌ Flow file \`${targetName}\` not found.`);
 				return {};
 			}
 
-			const enhancedYaml = await this._enhanceFlowYaml(existingContent, trimmed, token);
-			if (!enhancedYaml) {
-				stream.markdown('❌ Failed to enhance the flow. Check the instruction and try again.');
+			// Build the instruction, stripping #file: markers (resolved via references)
+			let instruction = this._cleanEnhancePrompt(trimmed);
+			if (contextFiles.length > 0) {
+				const ctxSection = contextFiles.map(f => `\n\n### Attached: ${f.label}\n\`\`\`\n${f.content}\n\`\`\``).join('');
+				instruction = `${instruction}\n\nThe user attached the following files as reference context:${ctxSection}`;
+			}
+
+			this.log.trace('handleEnhance: calling _enhanceFlowYaml');
+			const result = await this._enhanceFlowYaml(existingContent, instruction, request.model, token);
+			if (!result) {
+				this.log.error('_enhanceFlowYaml returned undefined — no language models available');
+				stream.markdown('❌ No language model available. Please check your model configuration.');
 				return {};
 			}
 
-			await vscode.workspace.fs.writeFile(targetUri, Buffer.from(enhancedYaml, 'utf8'));
-			stream.markdown(`✅ Enhanced \`${targetName}\`\n\n`);
+			if (!result.valid) {
+				stream.markdown('⚠️ **Warning**: The enhanced flow could not be fully validated, but the raw output has been saved. You may need to manually fix YAML issues.\n\n');
+			}
+
+			this.log.trace(`handleEnhance: YAML enhanced, length=${result.content.length}`);
+			await vscode.workspace.fs.writeFile(targetUri, Buffer.from(result.content, 'utf8'));
+			const statusIcon = result.valid ? '✅' : '⚠️';
+			this.log.info(`handleEnhance: flow written back to ${targetName} (valid=${result.valid})`);
+			stream.markdown(`${statusIcon} Enhanced \`${targetName}\`\n\n`);
 			stream.markdown(`Run it with: \`@flow #file:${targetName}\``);
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
+			this.log.error(err instanceof Error ? err : msg, 'handleEnhance failed');
 			stream.markdown(`❌ **Error**: ${msg}`);
 		}
 
 		return {};
 	}
 
-	/** Generate YAML from natural language description using Prompt-TSX. */
-	private async _generateFlowYaml(
-		description: string,
-		token: vscode.CancellationToken
-	): Promise<string | undefined> {
-		const { messages } = await renderPrompt(
-			FlowAuthoringSkill,
-			{ description },
-			{ modelMaxPromptTokens: 8192 },
-			undefined as unknown as vscode.LanguageModelChat
-		);
+	/**
+	 * Resolve the target flow file and context files from the enhance request.
+	 * Uses VS Code's built-in reference resolution (request.references) when
+	 * files are attached via #file:.
+	 */
+	private async _resolveEnhanceReferences(
+		request: vscode.ChatRequest,
+		workspaceUri: vscode.Uri
+	): Promise<{ targetUri: vscode.Uri | undefined; targetName: string; contextFiles: { label: string; content: string }[] }> {
+		const flowsDir = vscode.Uri.joinPath(workspaceUri, '.github', 'flows');
 
-		const models = await vscode.lm.selectChatModels({ vendor: 'copilot' });
-		if (models.length === 0) { return undefined; }
+		// Step 1: Try to resolve from VS Code's reference system (#file: attachments)
+		let targetUri: vscode.Uri | undefined;
+		let targetName = '';
+		const contextFiles: { label: string; content: string }[] = [];
 
-		const response = await models[0].sendRequest(messages, {}, token);
-		let text = '';
-		for await (const chunk of response.stream) {
-			if (chunk instanceof vscode.LanguageModelTextPart) {
-				text += chunk.value;
+		for (const ref of request.references) {
+			const uri = refToUri(ref);
+			if (!uri) { continue; }
+
+			const isFlowFile = uri.path.endsWith('.flow.yaml') || uri.path.endsWith('.flow.yml');
+			if (isFlowFile && !targetUri) {
+				targetUri = uri;
+				targetName = vscode.workspace.asRelativePath(uri, false);
+				continue;
+			}
+
+			// Non-flow reference → read as context
+			try {
+				const bytes = await vscode.workspace.fs.readFile(uri);
+				const content = Buffer.from(bytes).toString('utf8');
+				const label = ref.modelDescription || vscode.workspace.asRelativePath(uri, false);
+				contextFiles.push({ label, content });
+				this.log.trace(`_resolveEnhanceReferences: attached context file ${label}`);
+			} catch {
+				this.log.trace(`_resolveEnhanceReferences: unable to read ${uri.fsPath}, skipping`);
 			}
 		}
 
-		const yamlContent = this._extractYamlBlock(text);
-		return this._validateFlowYaml(yamlContent);
+		if (targetUri) {
+			return { targetUri, targetName, contextFiles };
+		}
+
+		// Step 2: Fallback — parse prompt text for filename patterns
+		const trimmed = request.prompt.trim();
+		const words = trimmed.split(/\s+/);
+		let firstWord = words[0];
+
+		if (firstWord.startsWith('#file:')) {
+			firstWord = firstWord.slice('#file:'.length);
+		}
+
+		let flowFiles: [string, vscode.Uri][] = [];
+		try {
+			const entries = await vscode.workspace.fs.readDirectory(flowsDir);
+			flowFiles = entries
+				.filter(([name]) => name.endsWith('.flow.yaml'))
+				.map(([name]) => [name, vscode.Uri.joinPath(flowsDir, name)] as [string, vscode.Uri]);
+		} catch {
+			this.log.error('_resolveEnhanceReferences: .github/flows/ not found');
+		}
+
+		if (firstWord.endsWith('.flow.yaml') || firstWord.endsWith('.flow.yml')) {
+			const match = flowFiles.find(([name]) => name === firstWord);
+			targetUri = match ? match[1] : vscode.Uri.joinPath(flowsDir, firstWord);
+			targetName = firstWord;
+		} else if (flowFiles.length === 1) {
+			targetUri = flowFiles[0][1];
+			targetName = flowFiles[0][0];
+		} else if (flowFiles.length > 1) {
+			this.log.error(`_resolveEnhanceReferences: multiple flows (${flowFiles.length}) in .github/flows/ and no target specified`);
+		} else {
+			this.log.error('_resolveEnhanceReferences: no .flow.yaml files found and no reference attached');
+		}
+
+		return { targetUri, targetName, contextFiles };
+	}
+
+	/** Result from flow generation, valid or not. */
+	private static readonly _NO_MODEL: undefined = undefined;
+
+	/** Maximum retry rounds when the LLM produces invalid YAML. */
+	private static readonly _MAX_GENERATION_RETRIES = 3;
+
+	/**
+	 * Strip VS Code chat-reference markers (#file:) from the prompt text.
+	 * These are UI decorators that don't belong in the LLM instruction.
+	 * The actual file content is resolved via request.references separately.
+	 */
+	private _cleanEnhancePrompt(prompt: string): string {
+		return prompt
+			.replace(/#\w+(?:[\w-]*):\S+/g, '') // strip #file:, #folder:, #selection: etc
+			.replace(/\s{2,}/g, ' ')              // collapse multiple spaces
+			.trim();
+	}
+
+	/**
+	 * Generate YAML from natural language description using Prompt-TSX.
+	 * Returns `{ content: string; valid: boolean }` on success (content always present),
+	 * or undefined if no model is available.
+	 */
+	private async _generateFlowYaml(
+		description: string,
+		userModel: vscode.LanguageModelChat,
+		token: vscode.CancellationToken
+	): Promise<{ content: string; valid: boolean } | undefined> {
+		this.log.info(`_generateFlowYaml: userModel=${userModel.name}(${userModel.id}) vendor=${userModel.vendor}`);
+		const model = await selectModel(undefined, userModel, this.log);
+		if (!model) {
+			this.log.error('_generateFlowYaml: selectModel returned undefined — no language models available');
+			return undefined;
+		}
+		this.log.info(`_generateFlowYaml: selected model=${model.name}(${model.id}) vendor=${model.vendor}`);
+
+		const schema = await this._loadSchema();
+		const example = await this._loadExample();
+
+		// Compute token budget from model's max input, reserving headroom for response
+		const maxPromptTokens = Math.max(8192, (model.maxInputTokens || 32768) - 4096);
+
+		this.log.trace('_generateFlowYaml: calling renderPrompt');
+		const { messages: initialMessages } = await renderPrompt(
+			FlowAuthoringSkill,
+			{ description, schema, example },
+			{ modelMaxPromptTokens: maxPromptTokens },
+			model
+		);
+		this.log.trace(`_generateFlowYaml: renderPrompt returned ${initialMessages.length} messages`);
+
+		let lastError = '';
+		let lastRawYaml = '';
+		let allMessages = initialMessages;
+
+		for (let attempt = 0; attempt < FlowParticipant._MAX_GENERATION_RETRIES; attempt++) {
+			if (token.isCancellationRequested) { return undefined; }
+
+			this.log.trace(`_generateFlowYaml: attempt ${attempt + 1}/${FlowParticipant._MAX_GENERATION_RETRIES}`);
+			const response = await model.sendRequest(allMessages, {}, token);
+			let text = '';
+			for await (const chunk of response.stream) {
+				if (chunk instanceof vscode.LanguageModelTextPart) {
+					text += chunk.value;
+				}
+			}
+			this.log.trace(`_generateFlowYaml: model response length=${text.length}`);
+
+			const rawYaml = this._extractYamlBlock(text);
+			lastRawYaml = rawYaml;
+			this.log.trace(`_generateFlowYaml: extracted YAML, length=${rawYaml.length}`);
+
+			const validationError = this._validateFlowYamlWithError(rawYaml);
+			if (!validationError) {
+				this.log.info(`_generateFlowYaml: validation passed on attempt ${attempt + 1}, YAML length=${rawYaml.length}`);
+				return { content: rawYaml, valid: true };
+			}
+
+			lastError = validationError;
+			this.log.error(`_generateFlowYaml: validation failed on attempt ${attempt + 1}: ${validationError}`);
+
+			if (attempt < FlowParticipant._MAX_GENERATION_RETRIES - 1) {
+				const fixPrompt = new vscode.LanguageModelChatMessage(
+					vscode.LanguageModelChatMessageRole.User,
+					`The YAML you generated failed validation. Error:\n${validationError}\n\n` +
+					`Fix rules:\n` +
+					`- Output ONLY the raw YAML — NO @flow prefix, NO markdown fences, NO commentary.\n` +
+					`- The root must be a mapping starting with name:, NOT a list.\n` +
+					`- Role prompts use YAML block scalars (|). Their content lines must be indented 2+ spaces.\n` +
+					`- If sharedContext contains code blocks, their content must be further indented under the | scalar.\n` +
+					`After prompt: |, every continuation line MUST have at least 2 spaces of indentation.`
+				);
+				allMessages = [...initialMessages, ...allMessages.slice(initialMessages.length), fixPrompt];
+			}
+		}
+
+		this.log.error(`_generateFlowYaml: all ${FlowParticipant._MAX_GENERATION_RETRIES} attempts failed. Last error: ${lastError}`);
+		return { content: lastRawYaml || '', valid: false };
 	}
 
 	/** Enhance an existing flow using Prompt-TSX. */
 	private async _enhanceFlowYaml(
 		existingContent: string,
 		instruction: string,
+		userModel: vscode.LanguageModelChat,
 		token: vscode.CancellationToken
-	): Promise<string | undefined> {
+	): Promise<{ content: string; valid: boolean } | undefined> {
+		this.log.info(`_enhanceFlowYaml: userModel=${userModel.name}(${userModel.id}) vendor=${userModel.vendor}, instruction="${instruction.substring(0, 80)}"`);
+		const model = await selectModel(undefined, userModel, this.log);
+		if (!model) {
+			this.log.error('_enhanceFlowYaml: selectModel returned undefined — no language models available');
+			return undefined;
+		}
+		this.log.info(`_enhanceFlowYaml: selected model=${model.name}(${model.id}) vendor=${model.vendor}`);
+
+		const schema = await this._loadSchema();
+		const example = await this._loadExample();
 		const description = `Enhance this existing flow YAML:\n\n\`\`\`yaml\n${existingContent}\n\`\`\`\n\nInstruction: ${instruction}`;
-		const { messages } = await renderPrompt(
+
+		// Token budget from model, with generous headroom
+		const maxPromptTokens = Math.max(8192, (model.maxInputTokens || 32768) - 4096);
+
+		this.log.trace(`_enhanceFlowYaml: calling renderPrompt (maxPromptTokens=${maxPromptTokens})`);
+		const { messages: initialMessages } = await renderPrompt(
 			FlowAuthoringSkill,
-			{ description },
-			{ modelMaxPromptTokens: 8192 },
-			undefined as unknown as vscode.LanguageModelChat
+			{ description, schema, example },
+			{ modelMaxPromptTokens: maxPromptTokens },
+			model
 		);
+		this.log.trace(`_enhanceFlowYaml: renderPrompt returned ${initialMessages.length} messages`);
 
-		const models = await vscode.lm.selectChatModels({ vendor: 'copilot' });
-		if (models.length === 0) { return undefined; }
+		if (initialMessages.length === 0) {
+			this.log.error('_enhanceFlowYaml: renderPrompt returned 0 messages — existing flow may be too large for token budget');
+			return undefined;
+		}
 
-		const response = await models[0].sendRequest(messages, {}, token);
-		let text = '';
-		for await (const chunk of response.stream) {
-			if (chunk instanceof vscode.LanguageModelTextPart) {
-				text += chunk.value;
+		let lastError = '';
+		let lastRawYaml = '';
+		let allMessages = initialMessages;
+
+		for (let attempt = 0; attempt < FlowParticipant._MAX_GENERATION_RETRIES; attempt++) {
+			if (token.isCancellationRequested) { return undefined; }
+
+			this.log.trace(`_enhanceFlowYaml: attempt ${attempt + 1}/${FlowParticipant._MAX_GENERATION_RETRIES}`);
+			const response = await model.sendRequest(allMessages, {}, token);
+			let text = '';
+			for await (const chunk of response.stream) {
+				if (chunk instanceof vscode.LanguageModelTextPart) {
+					text += chunk.value;
+				}
+			}
+			this.log.trace(`_enhanceFlowYaml: model response length=${text.length}`);
+
+			const rawYaml = this._extractYamlBlock(text);
+			lastRawYaml = rawYaml;
+			this.log.trace(`_enhanceFlowYaml: extracted YAML, length=${rawYaml.length}`);
+
+			const validationError = this._validateFlowYamlWithError(rawYaml);
+			if (!validationError) {
+				this.log.info(`_enhanceFlowYaml: validation passed on attempt ${attempt + 1}, YAML length=${rawYaml.length}`);
+				return { content: rawYaml, valid: true };
+			}
+
+			lastError = validationError;
+			this.log.error(`_enhanceFlowYaml: validation failed on attempt ${attempt + 1}: ${validationError}`);
+
+			if (attempt < FlowParticipant._MAX_GENERATION_RETRIES - 1) {
+				const fixPrompt = new vscode.LanguageModelChatMessage(
+					vscode.LanguageModelChatMessageRole.User,
+					`The YAML you generated failed validation. Error:\n${validationError}\n\n` +
+					`Fix rules:\n` +
+					`- Output ONLY the raw YAML — NO @flow prefix, NO markdown fences, NO commentary.\n` +
+					`- The root must be a mapping starting with name:, NOT a list.\n` +
+					`- Role prompts use YAML block scalars (|). Their content lines must be indented 2+ spaces.\n` +
+					`- If sharedContext contains code blocks, their content must be further indented under the | scalar.\n` +
+					`After prompt: |, every continuation line MUST have at least 2 spaces of indentation.`
+				);
+				allMessages = [...initialMessages, ...allMessages.slice(initialMessages.length), fixPrompt];
 			}
 		}
 
-		const yamlContent = this._extractYamlBlock(text);
-		return this._validateFlowYaml(yamlContent);
+		this.log.error(`_enhanceFlowYaml: all ${FlowParticipant._MAX_GENERATION_RETRIES} attempts failed. Last error: ${lastError}`);
+		return { content: lastRawYaml || '', valid: false };
+	}
+
+	/** Load the flow JSON schema from the extension bundle. */
+	private async _loadSchema(): Promise<string> {
+		try {
+			const schemaUri = vscode.Uri.joinPath(this.context.extensionUri, 'schemas', 'flow.schema.json');
+			const bytes = await vscode.workspace.fs.readFile(schemaUri);
+			return Buffer.from(bytes).toString('utf8');
+		} catch {
+			return '';
+		}
+	}
+
+	/** Load an example flow from the extension bundle. */
+	private async _loadExample(): Promise<string> {
+		try {
+			const exampleUri = vscode.Uri.joinPath(this.context.extensionUri, 'examples', '01-pipeline-review.flow.yaml');
+			const bytes = await vscode.workspace.fs.readFile(exampleUri);
+			return Buffer.from(bytes).toString('utf8');
+		} catch {
+			return '';
+		}
 	}
 
 	/** Extract YAML from model output (handles markdown fences and raw YAML). */
 	private _extractYamlBlock(text: string): string {
-		// Try markdown code fence first
-		const fenceMatch = text.match(/```ya?ml?\s*\n([\s\S]*?)```/);
-		if (fenceMatch) {
-			return fenceMatch[1].trim();
+		// Step 1: Strip any leading lines that start with `@flow` (the model
+		// sometimes emits `@flow #file:...` as a lead-in before the YAML).
+		let cleaned = text;
+		const lines = cleaned.split('\n');
+		const firstContentLine = lines.findIndex(l => !/^\s*$/.test(l) && !/^\s*@flow\b/.test(l.trim()));
+		if (firstContentLine > 0) {
+			cleaned = lines.slice(firstContentLine).join('\n');
 		}
-		// Try without language identifier
-		const fenceMatch2 = text.match(/```\s*\n([\s\S]*?)```/);
-		if (fenceMatch2) {
-			return fenceMatch2[1].trim();
+
+		// Step 2: If the content starts with a markdown code fence, extract
+		// everything up to the LAST closing fence — not the first, because
+		// sharedContext templates contain nested ``` blocks.
+		const openMatch = cleaned.match(/^```(?:ya?ml?)?\s*\n/);
+		if (openMatch) {
+			const afterOpen = cleaned.substring(openMatch.index! + openMatch[0].length);
+			// Find the LAST ``` — this handles nested fences inside block scalars
+			const lastFenceIdx = afterOpen.lastIndexOf('\n```');
+			if (lastFenceIdx >= 0) {
+				const result = afterOpen.substring(0, lastFenceIdx).trim();
+				this.log.trace(`_extractYamlBlock: matched fence (last), extracted length=${result.length}`);
+				return result;
+			}
+			// If no closing fence found at all, return everything after opening
+			const result = afterOpen.trim();
+			this.log.trace(`_extractYamlBlock: no closing fence, extracted length=${result.length}`);
+			return result;
 		}
-		// Raw YAML — strip any leading/trailing commentary
-		const lines = text.trim().split('\n');
-		const startIdx = lines.findIndex(l => l.trim().startsWith('name:'));
+
+		// Step 3: Raw YAML — find the document start ("name:"), stop at trailing
+		// non-YAML content (e.g. "@flow #file:..." or "> suggestions").
+		const rawLines = cleaned.trim().split('\n');
+		const startIdx = rawLines.findIndex(l => l.trim().startsWith('name:'));
 		if (startIdx >= 0) {
-			return lines.slice(startIdx).join('\n').trim();
+			let endIdx = rawLines.length;
+			for (let i = startIdx + 1; i < rawLines.length; i++) {
+				const tr = rawLines[i].trim();
+				if (tr.startsWith('@flow') || tr.startsWith('@') || tr.startsWith('> ')) {
+					endIdx = i;
+					break;
+				}
+			}
+			const result = rawLines.slice(startIdx, endIdx).join('\n').trim();
+			this.log.trace(`_extractYamlBlock: raw YAML lines ${startIdx}-${endIdx}, extracted length=${result.length}`);
+			return result;
 		}
-		return text.trim();
+		this.log.trace(`_extractYamlBlock: no fence or name: marker found, returning raw text (length=${cleaned.trim().length})`);
+		return cleaned.trim();
+	}
+
+	/** Validate YAML against flow schema. Returns error message or undefined on success. */
+	private _validateFlowYamlWithError(content: string): string | undefined {
+		try {
+			const parsed = yaml.load(content);
+			if (!parsed || typeof parsed !== 'object') {
+				return `YAML parsed to non-object type: ${typeof parsed}. Content must be a valid YAML mapping.`;
+			}
+			const obj = parsed as Record<string, unknown>;
+			if (!obj.name || typeof obj.name !== 'string') {
+				return `Missing required 'name' field (must be a string). Found keys: ${Object.keys(obj).join(', ')}`;
+			}
+			if (!obj.roles && !obj.stages && !obj.groups) {
+				return `Missing structural key. Must have one of 'roles', 'stages', or 'groups'. Found keys: ${Object.keys(obj).join(', ')}`;
+			}
+			return undefined; // success
+		} catch (err) {
+			return `YAML syntax error: ${err instanceof Error ? err.message : String(err)}`;
+		}
 	}
 
 	/** Validate YAML against flow schema. Returns valid YAML or undefined. */
 	private _validateFlowYaml(content: string): string | undefined {
-		try {
-			const parsed = yaml.load(content);
-			if (!parsed || typeof parsed !== 'object') {
-				return undefined;
-			}
-			const obj = parsed as Record<string, unknown>;
-			if (!obj.name || typeof obj.name !== 'string') {
-				return undefined;
-			}
-			if (!obj.roles && !obj.stages && !obj.groups) {
-				return undefined;
-			}
-			return content;
-		} catch {
+		const error = this._validateFlowYamlWithError(content);
+		if (error) {
+			this.log.error(`_validateFlowYaml: ${error}`);
 			return undefined;
 		}
+		const parsed = yaml.load(content) as Record<string, unknown>;
+		this.log.trace(`_validateFlowYaml: valid. name=${parsed.name}, keys=${Object.keys(parsed).join(', ')}`);
+		return content;
 	}
 
 	/** Write flow YAML to .github/flows/ in the workspace and return relative path. */

@@ -135,3 +135,9 @@ The flow:
 ## Where to Go From Here
 
 You've completed all the basic tutorials. Move to [In Practice](/tutorials/your-first-flow/) to apply these concepts in a real workflow, or dive into [Advanced](/tutorials/quality-gates/) to learn flow author design patterns.
+
+
+---
+
+<a href="https://marketplace.visualstudio.com/items?itemName=feima.copilot-ai-flow" style="display: inline-block; background: #0078d4; color: #fff; padding: 10px 24px; border-radius: 6px; font-weight: 600; text-decoration: none;">⬇ Install AI Flow from the VS Code Marketplace</a>
+

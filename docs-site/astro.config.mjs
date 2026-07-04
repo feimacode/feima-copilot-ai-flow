@@ -1,14 +1,50 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import sitemap from '@astrojs/sitemap';
 
-// https://starlight.astro.build/
 export default defineConfig({
 	site: 'https://flow-docs.feimacode.com',
 	base: '/',
 	integrations: [
+		sitemap(),
 		starlight({
 			title: 'Copilot AI Flow',
-			description: 'Orchestrate multiple AI roles in a single command',
+			description: 'Multi-agent orchestration in VS Code — define AI workflows as version-controlled YAML files, run autonomous tool-using agents, get consistent repeatable results',
+			head: [
+				{
+					tag: 'meta',
+					attrs: { property: 'og:image', content: 'https://flow-docs.feimacode.com/assets/screenshots/flow-gallery.png' },
+				},
+				{
+					tag: 'meta',
+					attrs: { property: 'og:image:width', content: '976' },
+				},
+				{
+					tag: 'meta',
+					attrs: { property: 'og:image:height', content: '852' },
+				},
+				{
+					tag: 'meta',
+					attrs: { name: 'twitter:card', content: 'summary_large_image' },
+				},
+				{
+					tag: 'script',
+					attrs: { type: 'application/ld+json' },
+					content: JSON.stringify({
+						'@context': 'https://schema.org',
+						'@type': 'SoftwareApplication',
+						name: 'AI Flow - Multi-Agent Orchestration',
+						operatingSystem: 'Windows, macOS, Linux',
+						applicationCategory: 'DeveloperApplication',
+						offers: {
+							'@type': 'Offer',
+							price: '0',
+							priceCurrency: 'USD',
+						},
+						url: 'https://marketplace.visualstudio.com/items?itemName=feima.copilot-ai-flow',
+					}),
+				},
+			],
 			logo: {
 				src: './src/assets/logo.svg',
 			},

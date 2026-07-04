@@ -12,6 +12,8 @@ import { ToolCallRound } from '../prompts/flowTools';
 import { normalizeToolSchemas } from '../util/toolSchemaNormalizer';
 import { filterTools, shouldFilterTools } from '../util/toolFilter';
 import { CopilotSdkExecutor } from '../util/copilotSdkExecutor';
+import { selectModel } from '../util/selectModel';
+import { refToUri } from '../util/refToUri';
 import { ILogger } from '../platform/log/common/logService';
 
 /**
@@ -641,20 +643,11 @@ export class FlowEngine {
 		try {
 			let model: vscode.LanguageModelChat;
 			if (role.model) {
-				const modelName = role.model;
-				let allCandidates = await vscode.lm.selectChatModels({ vendor: 'copilot' });
-				if (allCandidates.length === 0) {
-					allCandidates = await vscode.lm.selectChatModels();
+				const resolved = await selectModel(role.model, currentChatModel, this.log);
+				if (!resolved) {
+					return { roleName: role.name, content: '', model: role.model, error: 'No language model available' };
 				}
-				const nameLower = modelName.toLowerCase();
-				const found =
-					allCandidates.find(m => m.name.toLowerCase() === nameLower || m.id.toLowerCase() === nameLower) ??
-					allCandidates.find(m => m.family.toLowerCase().includes(nameLower) || nameLower.includes(m.family.toLowerCase())) ??
-					allCandidates[0];
-				if (!found) {
-					return { roleName: role.name, content: '', model: modelName, error: 'No language model available' };
-				}
-				model = found;
+				model = resolved;
 			} else {
 				model = currentChatModel;
 			}
@@ -666,7 +659,7 @@ export class FlowEngine {
 			this.log.debug(`Model: ${model.name}, maxInputTokens=${model.maxInputTokens}, using maxPromptTokens=${maxPromptTokens}`);
 			
 			let responseText = '';
-			const maxToolRounds = 15;
+			const maxToolRounds = 100;
 			let toolRound = 0;
 			const toolCallRounds: ToolCallRound[] = [];
 			let toolCallResults: Record<string, vscode.LanguageModelToolResult> = {};
@@ -1109,14 +1102,7 @@ export class FlowEngine {
 		for (const ref of refs) {
 			if (token.isCancellationRequested) { break; }
 
-			let uri: vscode.Uri | undefined;
-			const v = ref.value as unknown;
-			if (v instanceof vscode.Uri) {
-				uri = v;
-			} else if (v && typeof v === 'object' && 'uri' in v && (v as { uri: unknown }).uri instanceof vscode.Uri) {
-				uri = (v as { uri: vscode.Uri }).uri;
-			}
-
+			const uri = refToUri(ref);
 			if (!uri) { continue; }
 			if (uri.toString() === flowFileUri.toString()) { continue; }
 
