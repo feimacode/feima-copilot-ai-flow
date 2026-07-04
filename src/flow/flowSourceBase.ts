@@ -73,6 +73,7 @@ export abstract class FlowSourceBase {
 		version?: string;
 		author?: string;
 		tutorialUrl?: string;
+		sharedContext?: string;
 	}> {
 		try {
 			const content = await vscode.workspace.fs.readFile(uri);
@@ -94,6 +95,7 @@ export abstract class FlowSourceBase {
 				version: doc.version ? String(doc.version) : undefined,
 				author: doc.author ? String(doc.author) : undefined,
 				tutorialUrl: doc.tutorialUrl ? String(doc.tutorialUrl) : undefined,
+				sharedContext: doc.sharedContext ? String(doc.sharedContext) : undefined,
 			};
 		} catch {
 			return {};
@@ -120,6 +122,7 @@ export abstract class FlowSourceBase {
 			version?: string;
 			author?: string;
 			tutorialUrl?: string;
+			sharedContext?: string;
 		},
 		source: 'builtin' | 'workspace',
 		filePath: string,
@@ -134,6 +137,7 @@ export abstract class FlowSourceBase {
 			version: metadata.version,
 			author: metadata.author,
 			tutorialUrl: metadata.tutorialUrl,
+			sharedContext: metadata.sharedContext,
 			source,
 			filePath,
 		};

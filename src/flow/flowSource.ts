@@ -96,6 +96,9 @@ export interface IFlowEntry {
 
 	/** Aggregate star count from catalog index */
 	starCount?: number;
+
+	/** Full sharedContext text from the flow YAML (What/When/How/Example/Customize). */
+	sharedContext?: string;
 }
 
 /**

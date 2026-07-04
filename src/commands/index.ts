@@ -355,6 +355,29 @@ export function registerCommands(context: vscode.ExtensionContext, logService: I
 		})
 	);
 
+	// Run a matched flow from intent matching — receive (flowId, prompt) and open chat
+	context.subscriptions.push(
+		vscode.commands.registerCommand('feima.copilot-ai-flow.runMatchedFlow', async (flowId: string, prompt: string) => {
+			if (!flowId) { return; }
+
+			const entry = await library.find(flowId);
+			if (!entry) {
+				vscode.window.showErrorMessage(`Flow "${flowId}" not found. It may have been removed.`);
+				return;
+			}
+
+			if (!entry.filePath) {
+				vscode.window.showErrorMessage(`Flow "${flowId}" has no local file. Try installing it first.`);
+				return;
+			}
+
+			const relPath = vscode.workspace.asRelativePath(entry.filePath);
+			await vscode.commands.executeCommand('workbench.action.chat.open', {
+				query: `@flow #file:${relPath} ${prompt ?? ''}`
+			});
+		})
+	);
+
 	// Run flow — open chat with @flow #file:<path>
 	context.subscriptions.push(
 		vscode.commands.registerCommand('feima.copilot-ai-flow.runFlow', async (uri?: vscode.Uri) => {

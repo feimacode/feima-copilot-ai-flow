@@ -8,6 +8,7 @@ import * as yaml from 'js-yaml';
 import { FlowEngine } from './flowEngine';
 import { FlowLibrary } from './flowLibrary';
 import { FlowDiscoveryService } from './flowDiscoveryService';
+import { FlowMatcher } from './flowMatcher';
 import { CatalogClient } from './catalogClient';
 import { ILogger } from '../platform/log/common/logService';
 import { renderPrompt } from '@vscode/prompt-tsx';
@@ -23,6 +24,7 @@ export class FlowParticipant {
 	private readonly engine: FlowEngine;
 	private readonly library: FlowLibrary;
 	private readonly discoveryService: FlowDiscoveryService;
+	private readonly matcher: FlowMatcher;
 	private readonly log: ILogger;
 
 	/** Ordered tutorial pages — markdown files inside docs-site/src/content/docs/tutorials/. */
@@ -54,6 +56,7 @@ export class FlowParticipant {
 		this.engine = new FlowEngine(engineLog);
 		this.library = new FlowLibrary(context, catalogClient);
 		this.discoveryService = new FlowDiscoveryService(discoveryLog);
+		this.matcher = new FlowMatcher(this.library, log.createSubLogger('Matcher'));
 		this.log = participantLog;
 	}
 	
@@ -100,10 +103,22 @@ export class FlowParticipant {
 			const flowFileUri = await this.discoveryService.findFlowFile(request, context, token);
 
 			if (!flowFileUri) {
-				stream.markdown('**Usage**: Reference a flow file or provide its name.\n\n');
-				stream.markdown('- Attach a file: `@flow #file:./my-flow.flow.yaml What should we do?`\n\n');
-				stream.markdown('- Use a name: `@flow sdd-spec-kit` (searches `.github/flows/`)\n\n');
-				stream.markdown('Open the gallery: `AI Flow: Open Flow Gallery`');
+				// No explicit flow reference — try intent-based semantic matching
+				const intentUri = await this._matchByIntent(request, stream, token);
+				if (intentUri) {
+					// Confident match found or user confirmed — execute directly
+					return this.engine.execute(intentUri, request, context, stream, token);
+				}
+
+				// If intent matching showed matches but user didn't pick one, the
+				// method handles its own UI. Only show usage if nothing matched at all.
+				const all = await this.library.getAll();
+				if (!all.some(f => f.source === 'workspace')) {
+					stream.markdown('**Usage**: Reference a flow file or provide its name.\n\n');
+					stream.markdown('- Attach a file: `@flow #file:./my-flow.flow.yaml What should we do?`\n\n');
+					stream.markdown('- Use a name: `@flow sdd-spec-kit` (searches `.github/flows/`)\n\n');
+					stream.markdown('Open the gallery: `AI Flow: Open Flow Gallery`');
+				}
 				return {};
 			}
 
@@ -114,6 +129,95 @@ export class FlowParticipant {
 			stream.markdown(`❌ **Error**: ${errorMessage}`);
 			return { errorDetails: { message: errorMessage } };
 		}
+	}
+
+	// ------------------------------------------------------------------
+	// Intent-based matching fallback
+	// ------------------------------------------------------------------
+
+	/**
+	 * Try to match a freeform user prompt to a workspace flow via LLM.
+	 *
+	 * - If the model is confident (top score ≥ 0.8), return the flow URI immediately.
+	 * - If there are candidates but none is confident, show them as clickable buttons
+	 *   in the chat stream and return undefined (the user can click to run).
+	 * - If nothing matches at all, return undefined silently.
+	 */
+	private async _matchByIntent(
+		request: vscode.ChatRequest,
+		stream: vscode.ChatResponseStream,
+		token: vscode.CancellationToken
+	): Promise<vscode.Uri | undefined> {
+		const all = await this.library.getAll();
+		const workspaceFlows = all.filter(f => f.source === 'workspace');
+
+		if (workspaceFlows.length === 0) {
+			this.log.trace('_matchByIntent: no workspace flows installed');
+			return undefined;
+		}
+
+		const prompt = request.prompt.trim();
+		if (!prompt) {
+			return undefined;
+		}
+
+		this.log.info(`_matchByIntent: trying to match "${prompt.substring(0, 80)}" against ${workspaceFlows.length} workspace flows`);
+
+		stream.progress('Finding the best flow for your request...');
+
+		const outcome = await this.matcher.matchByIntent(prompt, request.model, token);
+
+		if (token.isCancellationRequested) {
+			return undefined;
+		}
+
+		if (outcome.matches.length === 0) {
+			this.log.info('_matchByIntent: no matches found');
+			return undefined;
+		}
+
+		// Confident — auto-execute the top match
+		if (outcome.confident) {
+			const top = outcome.matches[0];
+			this.log.info(`_matchByIntent: confident match — ${top.entry.id} (score=${top.score})`);
+			stream.markdown(`🔍 Matched **${top.entry.name}** (${Math.round(top.score * 100)}% confidence)\n\n`);
+			if (top.reasoning) {
+				stream.markdown(`> ${top.reasoning}\n\n`);
+			}
+			stream.markdown('---\n\n');
+
+			if (top.entry.filePath) {
+				return vscode.Uri.file(top.entry.filePath);
+			}
+		}
+
+		// Not confident — show ranked candidates as buttons
+		this.log.info(`_matchByIntent: ${outcome.matches.length} candidates, none confident — showing picker`);
+		stream.markdown(`I'm not sure which flow fits your request best. Here are some options:\n\n`);
+
+		for (const m of outcome.matches) {
+			const pct = Math.round(m.score * 100);
+			stream.markdown(`### ${m.entry.name} (${pct}% match)\n`);
+			if (m.reasoning) {
+				stream.markdown(`> ${m.reasoning}\n\n`);
+			}
+			if (m.entry.description) {
+				stream.markdown(`${m.entry.description}\n\n`);
+			}
+			// Clickable button to run this flow with the user's original prompt
+			const runArgs = [m.entry.id, prompt];
+			stream.button({
+				command: 'feima.copilot-ai-flow.runMatchedFlow',
+				arguments: runArgs,
+				title: `▶ Run ${m.entry.name}`
+			});
+			stream.markdown('\n\n---\n\n');
+		}
+
+		stream.markdown(`💡 Not what you're looking for? `);
+		stream.markdown(`Use \`@flow /list\` to see all flows or attach a specific flow file with \`#file:\`.\n\n`);
+
+		return undefined;
 	}
 
 	// ------------------------------------------------------------------
