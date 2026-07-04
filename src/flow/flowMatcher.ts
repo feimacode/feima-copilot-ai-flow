@@ -10,6 +10,7 @@ import { IFlowEntry } from './flowSource';
 import { FlowLibrary } from './flowLibrary';
 import { selectModel } from '../util/selectModel';
 import { ILogger } from '../platform/log/common/logService';
+import { getConfidenceThreshold, getMinScore } from '../config/flowSettings';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -38,10 +39,10 @@ export interface IMatchOutcome {
 // ---------------------------------------------------------------------------
 
 /** Score threshold above which we auto-execute without confirmation. */
-const CONFIDENCE_THRESHOLD = 0.8;
+const CONFIDENCE_THRESHOLD = getConfidenceThreshold();
 
 /** Minimum score to include a flow in results. */
-const MIN_SCORE = 0.5;
+const MIN_SCORE = getMinScore();
 
 // ---------------------------------------------------------------------------
 // FlowMatcher

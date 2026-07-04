@@ -15,6 +15,7 @@ import { CopilotSdkExecutor } from '../util/copilotSdkExecutor';
 import { selectModel } from '../util/selectModel';
 import { refToUri } from '../util/refToUri';
 import { ILogger } from '../platform/log/common/logService';
+import { getMaxToolRounds, getMaxToolCount } from '../config/flowSettings';
 
 /**
  * Flow execution engine - handles all execution strategies and prompt resolution.
@@ -709,7 +710,7 @@ export class FlowEngine {
 				if (tools && tools.length > 0 && modelSupportsTools) {
 					let filteredTools = tools;
 					if (shouldFilterTools(tools.length)) {
-						this.log.debug(`Applying smart tool filtering (${tools.length} -> max 128)`);
+						this.log.debug(`Applying smart tool filtering (${tools.length} -> max ${getMaxToolCount()})`);
 						filteredTools = filterTools(tools, userQuery, undefined, this.log);
 					}
 					

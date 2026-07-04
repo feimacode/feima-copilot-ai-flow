@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { ILogger } from '../platform/log/common/logService';
+import { getToolInvokeTokenBudget } from '../config/flowSettings';
 
 /**
  * Invoke an LM tool from outside a Prompt-TSX rendering cycle.
@@ -41,7 +42,7 @@ export async function customInvokeTool(
 				input,
 				toolInvocationToken: invocationToken,
 				tokenizationOptions: {
-					tokenBudget: 4000,
+					tokenBudget: getToolInvokeTokenBudget(),
 					countTokens: async (content: string) => Math.ceil(content.length / 4)
 				}
 			},

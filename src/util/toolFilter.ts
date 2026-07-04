@@ -5,12 +5,15 @@
 
 import * as vscode from 'vscode';
 import { ILogger } from '../platform/log/common/logService';
+import { getMaxToolCount } from '../config/flowSettings';
 
 /**
- * Hard limit on number of tools that can be sent to the LLM
- * This matches the limit in vscode-copilot-chat extension
+ * Hard limit on number of tools that can be sent to the LLM.
+ * Reads from aiFlow.maxToolCount setting (default 128).
  */
-const HARD_TOOL_LIMIT = 128;
+function hardToolLimit(): number {
+	return getMaxToolCount();
+}
 
 /**
  * Core tools that should always be included (highest priority)
@@ -128,7 +131,7 @@ function scoreToolRelevance(tool: vscode.LanguageModelChatTool, query: string): 
 export function filterTools(
 	allTools: vscode.LanguageModelChatTool[],
 	query: string,
-	maxTools: number = HARD_TOOL_LIMIT,
+	maxTools: number = hardToolLimit(),
 	log?: ILogger
 ): vscode.LanguageModelChatTool[] {
 	if (allTools.length <= maxTools) {
@@ -191,5 +194,5 @@ export function filterTools(
  * Check if tool filtering is needed
  */
 export function shouldFilterTools(toolCount: number): boolean {
-	return toolCount > HARD_TOOL_LIMIT;
+	return toolCount > hardToolLimit();
 }

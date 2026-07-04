@@ -323,6 +323,53 @@
           "group": "1_open"
         }
       ]
+    },
+    "configuration": {
+      "title": "AI Flow",
+      "properties": {
+        "aiFlow.maxToolRounds": {
+          "type": "number",
+          "default": 100,
+          "minimum": 1,
+          "maximum": 500,
+          "description": "Maximum tool-calling loop iterations per role before the engine stops and reports the result."
+        },
+        "aiFlow.maxToolCount": {
+          "type": "number",
+          "default": 128,
+          "minimum": 1,
+          "maximum": 128,
+          "description": "Maximum number of tools sent to the LLM. When exceeded, smart filtering keeps the most relevant tools."
+        },
+        "aiFlow.flowMatch.confidenceThreshold": {
+          "type": "number",
+          "default": 0.8,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Score threshold (0.0–1.0) above which a flow match auto-executes without confirmation."
+        },
+        "aiFlow.flowMatch.minScore": {
+          "type": "number",
+          "default": 0.5,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Minimum score (0.0–1.0) to include a flow match in the results list."
+        },
+        "aiFlow.maxGenerationRetries": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Maximum retry rounds when the LLM produces invalid YAML during /create or /enhance."
+        },
+        "aiFlow.toolInvokeTokenBudget": {
+          "type": "number",
+          "default": 4000,
+          "minimum": 100,
+          "maximum": 16000,
+          "description": "Token budget reserved for tool invocation result content."
+        }
+      }
     }
   },
   "scripts": {

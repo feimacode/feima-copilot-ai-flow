@@ -8,7 +8,7 @@ export default defineConfig({
 	integrations: [
 		sitemap(),
 		starlight({
-			title: 'Copilot AI Flow',
+			title: 'Feima AI Flow',
 			description: 'Multi-agent orchestration in VS Code — define AI workflows as version-controlled YAML files, run autonomous tool-using agents, get consistent repeatable results',
 			head: [
 				{
@@ -96,6 +96,7 @@ export default defineConfig({
 							items: [
 								{ label: 'Quality Gates', link: '/tutorials/quality-gates/' },
 								{ label: 'Efficiency Patterns', link: '/tutorials/efficiency-patterns/' },
+								{ label: 'Propose-Review-Moderate-Apply', link: '/tutorials/propose-review-moderate-apply/' },
 								{ label: 'Autonomous Design', link: '/tutorials/autonomous-design/' },
 								{ label: 'Case Study: Full-Cycle', link: '/tutorials/case-study-full-cycle/' },
 							],
@@ -109,6 +110,7 @@ export default defineConfig({
 						{ label: 'Referencing Files in Flows', link: '/guides/referencing-files/' },
 						{ label: 'Flow Authoring Concepts', link: '/guides/flow-authoring/' },
 						{ label: 'Tool Integration', link: '/guides/tool-integration/' },
+						{ label: 'Settings', link: '/guides/settings/' },
 					],
 				},
 			],

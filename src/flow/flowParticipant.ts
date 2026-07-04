@@ -15,6 +15,7 @@ import { renderPrompt } from '@vscode/prompt-tsx';
 import { FlowAuthoringSkill } from '../prompts/flowAuthoringSkill';
 import { selectModel } from '../util/selectModel';
 import { refToUri } from '../util/refToUri';
+import { getMaxGenerationRetries } from '../config/flowSettings';
 
 /**
  * Chat participant that orchestrates flow discussions.
@@ -886,7 +887,13 @@ export class FlowParticipant {
 	private static readonly _NO_MODEL: undefined = undefined;
 
 	/** Maximum retry rounds when the LLM produces invalid YAML. */
-	private static readonly _MAX_GENERATION_RETRIES = 3;
+	private static _maxGenerationRetriesCache: number | undefined;
+
+	private static _retries(): number {
+		const v = FlowParticipant._maxGenerationRetriesCache;
+		if (v !== undefined) { return v; }
+		return FlowParticipant._maxGenerationRetriesCache = getMaxGenerationRetries();
+	}
 
 	/**
 	 * Strip VS Code chat-reference markers (#file:) from the prompt text.
@@ -937,10 +944,10 @@ export class FlowParticipant {
 		let lastRawYaml = '';
 		let allMessages = initialMessages;
 
-		for (let attempt = 0; attempt < FlowParticipant._MAX_GENERATION_RETRIES; attempt++) {
+		for (let attempt = 0; attempt < FlowParticipant._retries(); attempt++) {
 			if (token.isCancellationRequested) { return undefined; }
 
-			this.log.trace(`_generateFlowYaml: attempt ${attempt + 1}/${FlowParticipant._MAX_GENERATION_RETRIES}`);
+			this.log.trace(`_generateFlowYaml: attempt ${attempt + 1}/${FlowParticipant._retries()}`);
 			const response = await model.sendRequest(allMessages, {}, token);
 			let text = '';
 			for await (const chunk of response.stream) {
@@ -963,7 +970,7 @@ export class FlowParticipant {
 			lastError = validationError;
 			this.log.error(`_generateFlowYaml: validation failed on attempt ${attempt + 1}: ${validationError}`);
 
-			if (attempt < FlowParticipant._MAX_GENERATION_RETRIES - 1) {
+			if (attempt < FlowParticipant._retries() - 1) {
 				const fixPrompt = new vscode.LanguageModelChatMessage(
 					vscode.LanguageModelChatMessageRole.User,
 					`The YAML you generated failed validation. Error:\n${validationError}\n\n` +
@@ -978,7 +985,7 @@ export class FlowParticipant {
 			}
 		}
 
-		this.log.error(`_generateFlowYaml: all ${FlowParticipant._MAX_GENERATION_RETRIES} attempts failed. Last error: ${lastError}`);
+		this.log.error(`_generateFlowYaml: all ${FlowParticipant._retries()} attempts failed. Last error: ${lastError}`);
 		return { content: lastRawYaml || '', valid: false };
 	}
 
@@ -1022,10 +1029,10 @@ export class FlowParticipant {
 		let lastRawYaml = '';
 		let allMessages = initialMessages;
 
-		for (let attempt = 0; attempt < FlowParticipant._MAX_GENERATION_RETRIES; attempt++) {
+		for (let attempt = 0; attempt < FlowParticipant._retries(); attempt++) {
 			if (token.isCancellationRequested) { return undefined; }
 
-			this.log.trace(`_enhanceFlowYaml: attempt ${attempt + 1}/${FlowParticipant._MAX_GENERATION_RETRIES}`);
+			this.log.trace(`_enhanceFlowYaml: attempt ${attempt + 1}/${FlowParticipant._retries()}`);
 			const response = await model.sendRequest(allMessages, {}, token);
 			let text = '';
 			for await (const chunk of response.stream) {
@@ -1048,7 +1055,7 @@ export class FlowParticipant {
 			lastError = validationError;
 			this.log.error(`_enhanceFlowYaml: validation failed on attempt ${attempt + 1}: ${validationError}`);
 
-			if (attempt < FlowParticipant._MAX_GENERATION_RETRIES - 1) {
+			if (attempt < FlowParticipant._retries() - 1) {
 				const fixPrompt = new vscode.LanguageModelChatMessage(
 					vscode.LanguageModelChatMessageRole.User,
 					`The YAML you generated failed validation. Error:\n${validationError}\n\n` +
@@ -1063,7 +1070,7 @@ export class FlowParticipant {
 			}
 		}
 
-		this.log.error(`_enhanceFlowYaml: all ${FlowParticipant._MAX_GENERATION_RETRIES} attempts failed. Last error: ${lastError}`);
+		this.log.error(`_enhanceFlowYaml: all ${FlowParticipant._retries()} attempts failed. Last error: ${lastError}`);
 		return { content: lastRawYaml || '', valid: false };
 	}
 
