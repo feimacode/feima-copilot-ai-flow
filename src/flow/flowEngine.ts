@@ -144,6 +144,37 @@ export class FlowEngine {
 		};
 	}
 
+	/** Expose prompt rendering for follow-up turns. */
+	async renderMessagesForContinuation(
+		request: vscode.ChatRequest,
+		history: ReadonlyArray<FlowTurn>,
+		toolCallRounds: ToolCallRound[],
+		toolCallResults: Record<string, vscode.LanguageModelToolResult>,
+		model: vscode.LanguageModelChat,
+		toolInvocationToken: vscode.ChatParticipantToolToken | undefined,
+		token: vscode.CancellationToken
+	): Promise<{ messages: vscode.LanguageModelChatMessage[]; toolCallResults: Record<string, vscode.LanguageModelToolResult> }> {
+		const vsCodeContext = this.contextBuilder.buildContext(request);
+		const rawMaxInput = model.maxInputTokens || 32768;
+		const maxPromptTokens = rawMaxInput > 16384
+			? rawMaxInput - 8192
+			: Math.floor(rawMaxInput * 0.75);
+
+		return this.promptRenderer.renderRolePrompt(
+			'Assistant',
+			'You are a helpful AI coding assistant.',
+			request.prompt,
+			vsCodeContext,
+			'',       // sharedContext — none for follow-up turns
+			[],       // contextFiles — none for follow-up turns
+			history,
+			maxPromptTokens,
+			toolCallRounds,
+			toolCallResults,
+			toolInvocationToken
+		);
+	}
+
 	/**
 	 * Sequential orchestration: roles respond one after another
 	 */

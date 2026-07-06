@@ -33,7 +33,7 @@ export class FlowDiscoveryService {
 	}
 
 	/** Scan a list of references and return the best flow-file URI. */
-	private scanRefs(refs: readonly vscode.ChatPromptReference[]): vscode.Uri | undefined {
+	public scanRefs(refs: readonly vscode.ChatPromptReference[]): vscode.Uri | undefined {
 		for (const ref of refs) {
 			const uri = refToUri(ref);
 			if (!uri) { continue; }
@@ -41,6 +41,17 @@ export class FlowDiscoveryService {
 			if (lp.endsWith('.flow.yaml') || lp.endsWith('.flow.yml')) { return uri; }
 		}
 		return undefined;
+	}
+
+	/**
+	 * Check whether the given prompt matches a known flow file in .github/flows/.
+	 * Returns true if the prompt is a flow name (not a natural-language question).
+	 */
+	public async isPromptFlowName(prompt: string): Promise<boolean> {
+		const name = prompt.trim();
+		if (!name) { return false; }
+		const matches = await this.findFlowsByName(name);
+		return matches.length >= 1;
 	}
 
 	/**

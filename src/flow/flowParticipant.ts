@@ -15,7 +15,10 @@ import { renderPrompt } from '@vscode/prompt-tsx';
 import { FlowAuthoringSkill } from '../prompts/flowAuthoringSkill';
 import { selectModel } from '../util/selectModel';
 import { refToUri } from '../util/refToUri';
-import { getMaxGenerationRetries } from '../config/flowSettings';
+import { getMaxGenerationRetries, getMaxToolRounds } from '../config/flowSettings';
+import { FlowTurn } from '../session/flowConversation';
+import { IFlowContext } from '../context/flowContextBuilder';
+import { ToolCallRound } from '../prompts/flowTools';
 
 /**
  * Chat participant that orchestrates flow discussions.
@@ -27,6 +30,10 @@ export class FlowParticipant {
 	private readonly discoveryService: FlowDiscoveryService;
 	private readonly matcher: FlowMatcher;
 	private readonly log: ILogger;
+
+	/** URI of the last flow that was executed in this chat session.
+	 *  Used to enable conversational follow-up mode on subsequent turns. */
+	private _lastExecutedFlowUri: vscode.Uri | undefined;
 
 	/** Ordered tutorial pages — markdown files inside docs-site/src/content/docs/tutorials/. */
 	private static readonly _tutorialPages = [
@@ -94,11 +101,25 @@ export class FlowParticipant {
 			// Debug: log what we're receiving
 			this.log.info(`Request received — command: ${request.command}, prompt: ${request.prompt}, references: ${request.references?.length}`);
 
+			// Reset flow tracking for new chat sessions
+			if (context.history.length === 0) {
+				this._lastExecutedFlowUri = undefined;
+			}
+
 			// Dispatch slash commands (/search, /list, /browse, /install) before any
 			// flow-execution logic. These commands query/install the built-in library.
 			if (request.command) {
 				this.log.info(`Routing to handleLibraryCommand: ${request.command}`);
 				return this.handleLibraryCommand(request, stream, token);
+			}
+
+			// ── Follow-up detection ──────────────────────────────────────
+			// After a flow has run on the first turn, subsequent turns without
+			// an explicit flow attachment are treated as conversational follow-ups.
+			// We use a simple general-agent handler — no flow roles, no synthesis.
+			if (this._lastExecutedFlowUri && await this._isFollowUpTurn(request, context)) {
+				this.log.info(`Follow-up turn detected — routing to general agent`);
+				return this._handleFollowUp(request, context, stream, token);
 			}
 
 			const flowFileUri = await this.discoveryService.findFlowFile(request, context, token);
@@ -108,6 +129,7 @@ export class FlowParticipant {
 				const intentUri = await this._matchByIntent(request, stream, token);
 				if (intentUri) {
 					// Confident match found or user confirmed — execute directly
+					this._lastExecutedFlowUri = intentUri;
 					return this.engine.execute(intentUri, request, context, stream, token);
 				}
 
@@ -123,6 +145,7 @@ export class FlowParticipant {
 				return {};
 			}
 
+			this._lastExecutedFlowUri = flowFileUri;
 			return this.engine.execute(flowFileUri, request, context, stream, token);
 			
 		} catch (error) {
@@ -130,6 +153,212 @@ export class FlowParticipant {
 			stream.markdown(`❌ **Error**: ${errorMessage}`);
 			return { errorDetails: { message: errorMessage } };
 		}
+	}
+
+	// ------------------------------------------------------------------
+	// Follow-up turn detection
+	// ------------------------------------------------------------------
+
+	/**
+	 * Determine whether this request is a conversational follow-up to a
+	 * previously-executed flow rather than a new flow execution request.
+	 *
+	 * A turn is a follow-up when:
+	 * - A flow has already been executed in this session
+	 * - The current request has NO flow file attached (#file: reference)
+	 * - The user's prompt is NOT a flow name match (e.g. "sdd-spec-kit")
+	 * - Chat history exists (at least one previous turn)
+	 */
+	private async _isFollowUpTurn(
+		request: vscode.ChatRequest,
+		context: vscode.ChatContext
+	): Promise<boolean> {
+		// No history means this is the first turn — not a follow-up
+		if (context.history.length === 0) {
+			return false;
+		}
+
+		// If user attached a flow file explicitly, treat as fresh execution
+		const hasFlowRef = this.discoveryService.scanRefs(request.references);
+		if (hasFlowRef) {
+			return false;
+		}
+
+		// If the prompt matches a known flow name, treat as fresh execution
+		const prompt = request.prompt.trim();
+		if (prompt && await this.discoveryService.isPromptFlowName(prompt)) {
+			return false;
+		}
+
+		// Otherwise, this is a conversational follow-up
+		return true;
+	}
+
+	/**
+	 * Handle a conversational follow-up turn using prompt-tsx for token-budget-
+	 * aware message rendering — same pipeline as callRole() in FlowEngine.
+	 *
+	 * The stream/tool-call loop is identical to callRole's pattern:
+	 * renderMessages → sendRequest → stream parts → invoke tools → repeat.
+	 */
+	private async _handleFollowUp(
+		request: vscode.ChatRequest,
+		context: vscode.ChatContext,
+		stream: vscode.ChatResponseStream,
+		token: vscode.CancellationToken
+	): Promise<vscode.ChatResult> {
+		// Build FlowTurn[] history from ChatContext so prompt-tsx can render it
+		const history = this._buildFlowTurnsFromHistory(context.history);
+
+		// Resolve the proposed thinking API
+		type ThinkingStream = { thinkingProgress: (d: { text?: string; id?: string; metadata?: Record<string, unknown> }) => void };
+		const thinkingStream = typeof (stream as unknown as ThinkingStream).thinkingProgress === 'function'
+			? (stream as unknown as ThinkingStream)
+			: undefined;
+		const ThinkingPartCtor = (vscode as unknown as Record<string, unknown>)['LanguageModelThinkingPart'] as (new (...args: unknown[]) => unknown) | undefined;
+
+		const maxToolRounds = getMaxToolRounds();
+		const toolCallRounds: ToolCallRound[] = [];
+		let toolCallResults: Record<string, vscode.LanguageModelToolResult> = {};
+
+		for (let round = 0; round < maxToolRounds && !token.isCancellationRequested; round++) {
+			// Render messages through prompt-tsx for token-budget-aware history & context
+			const renderResult = await this.engine.renderMessagesForContinuation(
+				request,
+				history,
+				toolCallRounds,
+				toolCallResults,
+				request.model,
+				request.toolInvocationToken,
+				token
+			);
+			if (token.isCancellationRequested) { break; }
+
+			toolCallResults = { ...toolCallResults, ...renderResult.toolCallResults };
+			const messages = renderResult.messages;
+			if (messages.length === 0) { break; }
+
+			const options: vscode.LanguageModelChatRequestOptions = {};
+			if (vscode.lm.tools.length > 0) {
+				options.tools = vscode.lm.tools.slice();
+			}
+
+			const response = await request.model.sendRequest(messages, options, token);
+
+			let roundText = '';
+			const toolCalls: vscode.LanguageModelToolCallPart[] = [];
+			let thinkingActive = false;
+
+			for await (const part of response.stream) {
+				if (token.isCancellationRequested) { break; }
+				if (part instanceof vscode.LanguageModelTextPart) {
+					if (thinkingActive) {
+						thinkingStream?.thinkingProgress({ id: '', text: '', metadata: { vscodeReasoningDone: true, stopReason: 'text' } });
+						thinkingActive = false;
+					}
+					roundText += part.value;
+					stream.markdown(part.value);
+				} else if (part instanceof vscode.LanguageModelToolCallPart) {
+					toolCalls.push(part);
+					stream.progress(`🔧 ${part.name}(...`);
+				} else if (part instanceof vscode.LanguageModelDataPart) {
+					if (part.mimeType.startsWith('text/')) {
+						try {
+							const decoded = new TextDecoder().decode(part.data);
+							roundText += decoded;
+							stream.markdown(decoded);
+						} catch { /* ignore */ }
+					}
+				} else if (ThinkingPartCtor && part instanceof ThinkingPartCtor) {
+					const thinkPart = part as { value: string | string[]; id?: string; metadata?: Record<string, unknown> };
+					const thinkText = Array.isArray(thinkPart.value) ? thinkPart.value.join('') : (thinkPart.value ?? '');
+					if (thinkingStream) {
+						thinkingStream.thinkingProgress({ text: thinkText, id: thinkPart.id, metadata: thinkPart.metadata });
+						thinkingActive = true;
+					} else if (thinkText) {
+						stream.markdown(`> 💭 ${thinkText}\n`);
+					}
+				} else if ((part as object)?.constructor?.name === 'LanguageModelThinkingPart') {
+					const thinkPart = part as { value: string | string[]; id?: string; metadata?: Record<string, unknown> };
+					const thinkText = Array.isArray(thinkPart.value) ? thinkPart.value.join('') : (thinkPart.value ?? '');
+					if (thinkingStream) {
+						thinkingStream.thinkingProgress({ text: thinkText, id: thinkPart.id, metadata: thinkPart.metadata });
+						thinkingActive = true;
+					} else if (thinkText) {
+						stream.markdown(`> 💭 ${thinkText}\n`);
+					}
+				}
+			}
+			if (thinkingActive) {
+				thinkingStream?.thinkingProgress({ id: '', text: '', metadata: { vscodeReasoningDone: true, stopReason: 'other' } });
+			}
+
+			if (token.isCancellationRequested) { break; }
+			if (toolCalls.length === 0) { break; }
+
+			// Record round for next iteration's prompt rendering
+			toolCallRounds.push({ response: roundText, toolCalls });
+
+			// Invoke each tool and feed results back
+			const resultParts: vscode.LanguageModelToolResultPart[] = [];
+			for (const tc of toolCalls) {
+				try {
+					const toolResult = await vscode.lm.invokeTool(
+						tc.name,
+						{ toolInvocationToken: request.toolInvocationToken, input: tc.input },
+						token
+					);
+					resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, toolResult.content));
+				} catch (err) {
+					resultParts.push(new vscode.LanguageModelToolResultPart(tc.callId, [
+						new vscode.LanguageModelTextPart(
+							`Tool error: ${err instanceof Error ? err.message : String(err)}`
+						)
+					]));
+				}
+			}
+
+			// We don't push to messages here — prompt-tsx handles tool round serialization
+			// via renderMessagesForContinuation on the next iteration
+		}
+
+		return {};
+	}
+
+	/**
+	 * Convert VS Code ChatContext history into FlowTurn[] for prompt-tsx rendering.
+	 * Each turn captures the user prompt and the assistant's markdown response.
+	 * Turns from other participants are skipped.
+	 */
+	private _buildFlowTurnsFromHistory(
+		history: readonly (vscode.ChatRequestTurn | vscode.ChatResponseTurn)[]
+	): FlowTurn[] {
+		// Minimal IFlowContext for history turns — just enough so prompt-tsx doesn't break
+		const emptyCtx: IFlowContext = { references: [] };
+
+		const turns: FlowTurn[] = [];
+		for (const turn of history) {
+			if (turn instanceof vscode.ChatRequestTurn) {
+				if (turn.participant === 'feima.copilot-ai-flow' || !turn.participant) {
+					const ft = new FlowTurn(turn.prompt, emptyCtx);
+					ft.responses.set('user', turn.prompt);
+					turns.push(ft);
+				}
+			} else if (turn instanceof vscode.ChatResponseTurn) {
+				if (turn.participant === 'feima.copilot-ai-flow' || !turn.participant) {
+					const text = turn.response
+						.filter((p): p is vscode.ChatResponseMarkdownPart => p instanceof vscode.ChatResponseMarkdownPart)
+						.map(p => p.value.value)
+						.join('\n');
+					if (text.trim()) {
+						const ft = new FlowTurn('', emptyCtx);
+						ft.responses.set('Assistant', text);
+						turns.push(ft);
+					}
+				}
+			}
+		}
+		return turns;
 	}
 
 	// ------------------------------------------------------------------
