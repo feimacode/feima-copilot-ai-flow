@@ -555,17 +555,14 @@ export class FlowEngine {
 	 * Get tools array from flow config, filtering out blocked tools
 	 */
 	private getFlowTools(config: IFlowConfig): { tools: vscode.LanguageModelChatTool[] | undefined; missingTools: ReadonlyArray<string>; blockedTools: ReadonlyArray<string> } {
-		if (!config.tools || config.tools.length === 0) {
-			return { tools: undefined, missingTools: [], blockedTools: [] };
-		}
-		
 		const allTools = vscode.lm.tools;
 		if (!allTools) {
 			this.log.warn('vscode.lm.tools is undefined');
 			return { tools: undefined, missingTools: config.tools ?? [], blockedTools: [] };
 		}
-		
-		if (config.tools.includes('*')) {
+
+		// Omitted or empty tools array → wildcard: grant all available tools.
+		if (!config.tools || config.tools.length === 0 || config.tools.includes('*')) {
 			this.log.debug(`Wildcard '*' detected - ${allTools.length} tools available`);
 			// Filter out blocked tools from wildcard
 			const filteredTools = allTools.filter(tool => !BLOCKED_TOOLS.has(tool.name));
